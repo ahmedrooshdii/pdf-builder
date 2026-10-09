@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The model and the shared failure vocabulary. No I/O, no framework, no package references
+    beyond the dependency-free Contracts project.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\PdfBuilder.Contracts\PdfBuilder.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

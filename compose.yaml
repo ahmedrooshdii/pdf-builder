@@ -1,0 +1,36 @@
+# Local stack:  docker compose up --build
+# API:          http://localhost:8080/scalar/v1
+# RabbitMQ UI:  http://localhost:15672  (guest / guest)
+
+services:
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: src/PdfBuilder.Api/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      RabbitMq__Host: rabbitmq
+      Storage__PublicBaseUrl: http://localhost:8080
+    volumes:
+      - pdf-data:/data
+      # Edit a template on the host and the next render picks it up, no rebuild needed.
+      - ./templates:/app/Templates:ro
+
+volumes:
+  pdf-data:

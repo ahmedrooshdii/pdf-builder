@@ -1,0 +1,28 @@
+{
+  "seller": {
+    "name": "Circle360",
+    "address": "12 Nile Street, Cairo, Egypt",
+    "tax_id": "100-200-300"
+  },
+  "customer": {
+    "name": "Acme Trading LLC",
+    "address": "44 Market Road, Dubai, UAE"
+  },
+  "invoice": {
+    "number": "INV-2026-0041",
+    "issued_on": "2026-10-01",
+    "due_on": "2026-10-31",
+    "currency": "USD",
+    "notes": "Payment due within 30 days. Late payments accrue 1.5% monthly interest."
+  },
+  "items": [
+    { "description": "Platform subscription - October", "quantity": 1, "unit_price": 1200.00 },
+    { "description": "Additional seats", "quantity": 12, "unit_price": 25.00 },
+    { "description": "Onboarding workshop", "quantity": 2, "unit_price": 450.00 }
+  ],
+  "totals": {
+    "subtotal": 2400.00,
+    "tax": 336.00,
+    "total": 2736.00
+  }
+}

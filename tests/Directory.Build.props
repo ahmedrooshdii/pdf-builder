@@ -1,0 +1,37 @@
+<Project>
+
+  <!-- Inherit the repository-wide settings first, then relax what only makes sense for product code. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!--
+      .NET 10 removed the VSTest path. xunit.v3 is a native Microsoft.Testing.Platform runner,
+      so the test assembly is its own executable and `dotnet test` drives it directly.
+    -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseVSTest>false</UseVSTest>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      CA1707: test names read as sentences here, so the underscores are the point.
+      CA1515: xunit discovers public classes.
+      CA2007: there is no synchronization context to capture in a test host.
+    -->
+    <NoWarn>$(NoWarn);CA1707;CA1515;CA2007</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The published wire vocabulary: message contracts plus the error codes that travel on them.
+    Deliberately dependency-free so any service can reference it. Every other project may
+    depend on it; it depends on nothing.
+  -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

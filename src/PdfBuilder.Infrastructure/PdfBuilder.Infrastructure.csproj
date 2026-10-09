@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Adapters: one folder per port in Application/Abstractions. This is the only project that
+    references Playwright, Scriban or the file system.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\PdfBuilder.Application\PdfBuilder.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+    <PackageReference Include="Microsoft.Playwright" />
+    <PackageReference Include="Scriban" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+{
+  "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo", "tax_id": "100-200-300" },
+  "customer": { "name": "Precision Test Co", "address": "Nowhere" },
+  "invoice":  {
+    "number": "INV-PRECISION",
+    "issued_on": "2026-10-07",
+    "due_on": "2026-11-07",
+    "currency": "USD",
+    "notes": "Checks that money keeps its decimals and large integers do not turn into 9.0072E+15."
+  },
+  "items": [
+    { "description": "Exact decimal (0.1 + 0.2 must read 0.30)", "quantity": 3,                "unit_price": 0.1 },
+    { "description": "Large integer reference 9007199254740993", "quantity": 1,                "unit_price": 1234567890.12 },
+    { "description": "Fractional quantity",                      "quantity": 2.5,              "unit_price": 40 }
+  ],
+  "totals": { "subtotal": 1234567990.42, "tax": 0, "total": 1234567990.42 }
+}

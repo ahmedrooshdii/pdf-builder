@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PdfBuilder.Infrastructure\PdfBuilder.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
