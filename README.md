@@ -118,6 +118,21 @@ Dependencies point inwards only: `Api -> Infrastructure -> Application -> Domain
 - [Configuration](docs/configuration.md) — every setting, and the hosted-broker walkthrough.
 - [Operations](docs/operations.md) — deployment, health checks, sizing, failure modes, known gaps.
 - [Samples](samples/README.md) — the payloads and how to run them.
+- [Deploying](deploy/README.md) — the Oracle Cloud Always Free setup CI deploys to.
+
+## CI/CD
+
+`.github/workflows/ci.yml` runs on every push and pull request: restore, build (warnings are
+errors, so this is the lint gate too), then the full test suite with Chromium installed.
+
+On `master` it goes further — builds an **arm64** image on a native ARM runner, pushes it to
+`ghcr.io/ahmedrooshdii/pdf-builder`, then deploys to the VM over SSH and polls `/health/ready`
+until it answers, so a deploy that comes back broken fails the run instead of going green.
+
+arm64 because Oracle's Always Free tier is Ampere. Building it natively rather than under QEMU
+turns the Chromium and apt layers from the better part of an hour into minutes.
+
+[deploy/README.md](deploy/README.md) has the one-time VM setup and the four repository secrets.
 
 ## Build conventions
 

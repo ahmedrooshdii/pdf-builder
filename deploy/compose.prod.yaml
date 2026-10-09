@@ -1,0 +1,65 @@
+# Runs on the Oracle Cloud VM at /opt/pdf-builder/compose.yaml.
+# CI copies this file across and starts it; see deploy/README.md for the one-time setup.
+#
+# Unlike the root compose.yaml this runs no broker of its own - a free Always Free VM has better
+# uses for its memory than a RabbitMQ nobody else talks to, and CloudAMQP is already provisioned.
+
+services:
+  api:
+    # CI pins this to the exact digest it just built. The default is only for manual runs.
+    image: ${PDF_BUILDER_IMAGE:-ghcr.io/ahmedrooshdii/pdf-builder:latest}
+    restart: unless-stopped
+
+    # Bound to localhost: the reverse proxy terminates TLS and is the only thing that should be
+    # reachable from outside. Publishing 8080 directly would expose the API with no TLS and,
+    # in a non-production environment, its docs along with it.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+
+      # Secrets and anything host-specific come from .env, which lives only on the VM.
+      RabbitMq__ConnectionString: ${RABBITMQ_CONNECTION_STRING:?set RABBITMQ_CONNECTION_STRING in .env}
+      Storage__PublicBaseUrl: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+
+      Storage__RootPath: /data/files
+      TemplateStore__RootPath: /app/Templates
+
+      # 2 OCPU on the Always Free tier. Each concurrent render costs roughly a browser tab, and
+      # rendering is CPU-bound, so going past the core count buys queueing rather than throughput.
+      Playwright__MaxConcurrentRenders: "2"
+
+    volumes:
+      - pdf-data:/data
+      # Templates are content, not code: editing them here takes effect on the next render,
+      # with no rebuild. CI overwrites this directory on every deploy.
+      - /opt/pdf-builder/templates:/app/Templates:ro
+
+    # Chromium is the memory risk. The reservation keeps the kernel from handing the whole VM to
+    # something else; the limit means a leaking browser takes down this container rather than
+    # the host. Leaves room on a 12 GB box for the proxy and the OS.
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q 200"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+    logging:
+      # Without this the JSON log file grows until the boot volume is full, which on a VM you
+      # are not watching is a slow and confusing way to go down.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pdf-data:
