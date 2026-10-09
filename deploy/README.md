@@ -7,25 +7,55 @@ Why a VM rather than a managed container platform: this service consumes a queue
 stay running, and Chromium needs real CPU and memory. The free tiers that scale to zero suspend
 the consumer, and the ones that stay up cap CPU far below what rendering needs.
 
-## 1. Create the VM
+## 1. Create the account
 
-In the Oracle Cloud console: **Compute → Instances → Create**.
+Sign up at [oracle.com/cloud/free](https://www.oracle.com/cloud/free/). A card is required for
+identity verification; Always Free resources are not billed.
+
+> **Your home region cannot be changed afterwards.** It is the single most consequential choice in
+> signup, because Ampere capacity is what this whole setup depends on and it is unevenly
+> distributed. Frankfurt (`eu-frankfurt-1`) and Singapore (`ap-singapore-1`) have historically had
+> capacity when the US regions had none. Pick a region near your users that is not one of the
+> busiest.
+
+## 2. Create the VM
+
+**Compute → Instances → Create instance.**
 
 | Setting | Value |
 | --- | --- |
-| Shape | **VM.Standard.A1.Flex** (Ampere, Arm) |
-| OCPUs / memory | 2 OCPU / 12 GB — the current Always Free allowance |
 | Image | Canonical Ubuntu 24.04 |
-| Boot volume | 50 GB (Always Free covers 200 GB total) |
-| SSH key | Upload a public key you hold the private half of |
+| Shape | **VM.Standard.A1.Flex** — under the *Ampere* tab, not *AMD* |
+| OCPUs | 2 |
+| Memory | 12 GB |
+| Boot volume | 50 GB (Always Free allows 200 GB in total) |
+| SSH key | Upload the public half of a key you hold |
 
-> Oracle reduced the Always Free Ampere allowance from 4 OCPU / 24 GB to **2 OCPU / 12 GB** in
-> June 2026, without announcing it. Ask for more than that and the instance will not start.
+Both the shape and the numbers matter. `VM.Standard.E2.1.Micro` is the AMD Always Free shape — it
+is 1 GB of RAM, which Chromium will not survive. And the Ampere allowance was **halved from 4
+OCPU / 24 GB to 2 OCPU / 12 GB in June 2026** with no announcement, so asking for the older figure
+now fails.
 
-Capacity in a given region is often exhausted — "Out of host capacity" is normal. Retry, or pick
-a different availability domain.
+### When it says "Out of host capacity"
 
-## 2. Open the ports
+This is the normal experience, not a mistake you made. Ampere capacity in the free tier is
+heavily oversubscribed. Nothing is created on a failed attempt, so retrying costs nothing.
+
+In rough order of effort:
+
+1. **Press Create again**, and try each availability domain and fault domain in turn.
+2. **Try at a quieter hour.** Capacity is released continuously as others tear instances down.
+3. **Upgrade to Pay As You Go.** This is the reliable fix: free accounts are served last, and
+   paid accounts usually get Ampere capacity immediately. Always Free resources stay free after
+   the upgrade — Oracle bills only for what exceeds the limits — so provided you create nothing
+   beyond 2 OCPU / 12 GB and 200 GB of storage, the bill stays at zero. Be aware of two things:
+   the upgrade places a temporary authorisation hold of around $100 on the card, and after it
+   nothing stops you from accidentally creating something billable.
+
+Scripts that retry the API on a loop until capacity appears are widely used for this, and are the
+pragmatic answer if you would rather not upgrade.
+
+## 3. Open the ports
 
 Two layers, and forgetting the second is the classic Oracle mistake.
 
@@ -41,7 +71,7 @@ sudo netfilter-persistent save
 
 Port 8080 stays closed. The container binds it to localhost and the proxy reaches it from there.
 
-## 3. Install Docker
+## 4. Install Docker
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
@@ -49,7 +79,7 @@ sudo usermod -aG docker ubuntu     # log out and back in for this to apply
 sudo apt install -y rsync          # the deploy syncs templates with it
 ```
 
-## 4. Create the application directory
+## 5. Create the application directory
 
 ```bash
 sudo mkdir -p /opt/pdf-builder/templates
@@ -70,7 +100,7 @@ chmod 600 /opt/pdf-builder/.env
 `PUBLIC_BASE_URL` must be the address **callers** reach, not the VM's. It is what every `fileUrl`
 is built from, so getting it wrong hands out dead links and nothing fails until someone clicks one.
 
-## 5. Make the image pullable
+## 6. Make the image pullable
 
 The repository is public, so make the GHCR package public too and the VM needs no credentials:
 
@@ -84,7 +114,7 @@ If you would rather keep it private, log in on the VM once with a PAT that has `
 echo "$GITHUB_PAT" | docker login ghcr.io -u ahmedrooshdii --password-stdin
 ```
 
-## 6. Put a reverse proxy in front
+## 7. Put a reverse proxy in front
 
 The container speaks plain HTTP on localhost. Caddy is the least work, because it obtains and
 renews the certificate by itself:
@@ -100,7 +130,7 @@ Point the domain's A record at the VM's public IP first, or the certificate requ
 > Without a proxy you would be serving the API over plain HTTP, and `/files/{fileId}` URLs are
 > bearer tokens — anyone who can read the traffic can fetch the document.
 
-## 7. Add the repository secrets
+## 8. Add the repository secrets
 
 **Settings → Secrets and variables → Actions**, and because the workflow uses a `production`
 environment, add them there (**Settings → Environments → production**) if you want a manual
@@ -125,7 +155,7 @@ ssh-keyscan <vm-ip>          # paste into DEPLOY_KNOWN_HOSTS
 cat ./pdf-builder-deploy     # paste into DEPLOY_SSH_KEY, then delete the local copy
 ```
 
-## 8. Deploy
+## 9. Deploy
 
 Push to `master`. The pipeline runs tests, builds the arm64 image, pushes it to GHCR, copies the
 compose file and templates to the VM, restarts the container on the exact digest it just built,
