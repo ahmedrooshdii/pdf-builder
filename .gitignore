@@ -1,0 +1,25 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.user
+*.suo
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Test / coverage
+[Tt]est[Rr]esult*/
+*.coverage
+coverage*.json
+coverage*.xml
+
+# Runtime data (generated PDFs, Playwright browsers)
+data/
+ms-playwright/
+
+# Local secrets
+*.local.json
+appsettings.*.Local.json

@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- Lets the CloudAMQP URI (it contains a password) live outside the repository. -->
+    <UserSecretsId>3fdd7ddd-3492-47df-a409-263cd680b41c</UserSecretsId>
+  </PropertyGroup>
+
+  <!--
+    The composition root and the only executable: it hosts both the HTTP endpoints and the
+    RabbitMQ consumer. See docs/architecture.md for when to split those into two deployables.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\PdfBuilder.Application\PdfBuilder.Application.csproj" />
+    <ProjectReference Include="..\PdfBuilder.Contracts\PdfBuilder.Contracts.csproj" />
+    <ProjectReference Include="..\PdfBuilder.Infrastructure\PdfBuilder.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MassTransit.RabbitMQ" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+  </ItemGroup>
+
+  <!--
+    Templates are content, not code, so they live at the repository root rather than inside a
+    project. They are linked into the output here for local runs; in a container they are
+    normally replaced by a mounted volume (see TemplateStore:RootPath).
+  -->
+  <ItemGroup>
+    <Content Include="..\..\templates\*.html;..\..\templates\*.options.json"
+             Link="Templates\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Internals are visible to the test project so endpoint DTOs need not be public API. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PdfBuilder.Api.Tests" />
+  </ItemGroup>
+
+</Project>

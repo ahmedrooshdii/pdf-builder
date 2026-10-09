@@ -1,0 +1,7 @@
+{
+  "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
+  "customer": { "name": "Acme Trading LLC", "address": "44 Market Road, Dubai" },
+  "invoice":  { "number": "INV-EMPTY", "issued_on": "2026-10-07", "due_on": "2026-11-07", "currency": "USD" },
+  "items":    [],
+  "totals":   { "subtotal": 0, "total": 0 }
+}

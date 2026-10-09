@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/solution items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+    <File Path="compose.yaml" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PdfBuilder.Api/PdfBuilder.Api.csproj" />
+    <Project Path="src/PdfBuilder.Application/PdfBuilder.Application.csproj" />
+    <Project Path="src/PdfBuilder.Contracts/PdfBuilder.Contracts.csproj" />
+    <Project Path="src/PdfBuilder.Domain/PdfBuilder.Domain.csproj" />
+    <Project Path="src/PdfBuilder.Infrastructure/PdfBuilder.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PdfBuilder.Api.Tests/PdfBuilder.Api.Tests.csproj" />
+    <Project Path="tests/PdfBuilder.Application.Tests/PdfBuilder.Application.Tests.csproj" />
+    <Project Path="tests/PdfBuilder.Infrastructure.Tests/PdfBuilder.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

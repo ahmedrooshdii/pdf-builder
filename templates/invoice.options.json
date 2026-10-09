@@ -1,0 +1,7 @@
+{
+  "format": "A4",
+  "landscape": false,
+  "printBackground": true,
+  "preferCssPageSize": true,
+  "margins": { "top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm" }
+}

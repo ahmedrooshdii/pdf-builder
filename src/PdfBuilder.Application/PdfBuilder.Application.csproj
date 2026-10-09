@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Use cases and the ports they need. Knows the Domain; knows nothing about Playwright,
+    Scriban, RabbitMQ or the file system - those are implementations of the interfaces in
+    Abstractions/, supplied by Infrastructure at composition time.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\PdfBuilder.Domain\PdfBuilder.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,196 @@
+<!doctype html>
+<!--
+  Sample template, rendered with Scriban. The payload object is the root scope, so a field
+  written as customer.name reads payload.customer.name. See docs/templates.md for the syntax.
+
+  Note that Scriban does not know what an HTML comment is: a tag written here is still parsed,
+  and a malformed one fails the whole template. Keep examples out of comments.
+
+  Two rules apply to every template in this service:
+    1. Assets must be inline (data: URIs) unless the host is on Playwright:AllowedHosts.
+       An external <img src="https://..."> is blocked by the renderer, not merely slow.
+    2. JavaScript does not run. Everything here must be plain HTML and CSS.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Invoice {{ invoice.number }}</title>
+  <style>
+    /* PreferCssPageSize is on by default, so this rule - not the Format option - decides the paper. */
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+
+    :root {
+      --ink: #1a1a1a;
+      --muted: #6b7280;
+      --rule: #e5e7eb;
+      --accent: #1d4ed8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Noto Sans", "DejaVu Sans", sans-serif;
+      font-size: 10pt;
+      line-height: 1.5;
+      color: var(--ink);
+      -webkit-print-color-adjust: exact;   /* keep backgrounds when PrintBackground is on */
+      print-color-adjust: exact;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--accent);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22pt;
+      letter-spacing: -0.5px;
+    }
+
+    .muted { color: var(--muted); }
+    .right { text-align: right; }
+
+    .meta {
+      margin-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .meta h2 {
+      margin: 0 0 4px;
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      margin-top: 24px;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      padding: 8px 6px;
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: left;
+      color: var(--muted);
+      border-bottom: 1px solid var(--rule);
+    }
+
+    tbody td {
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--rule);
+      vertical-align: top;
+    }
+
+    /* Repeat the header when a long invoice spills onto a second sheet,
+       and never split a line item across the page break. */
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+
+    tfoot td {
+      padding: 6px;
+      border: none;
+    }
+
+    tfoot .total td {
+      padding-top: 10px;
+      font-size: 12pt;
+      font-weight: 600;
+      border-top: 2px solid var(--accent);
+    }
+
+    footer {
+      margin-top: 32px;
+      padding-top: 12px;
+      border-top: 1px solid var(--rule);
+      font-size: 8pt;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>{{ seller.name }}</h1>
+      <div class="muted">{{ seller.address }}</div>
+      {{ if seller.tax_id }}<div class="muted">Tax ID: {{ seller.tax_id }}</div>{{ end }}
+    </div>
+    <div class="right">
+      <h1>Invoice</h1>
+      <div class="muted">#{{ invoice.number }}</div>
+    </div>
+  </header>
+
+  <section class="meta">
+    <div>
+      <h2>Billed to</h2>
+      <strong>{{ customer.name }}</strong>
+      <div class="muted">{{ customer.address }}</div>
+    </div>
+    <div class="right">
+      <h2>Issued</h2>
+      <div>{{ invoice.issued_on }}</div>
+      <h2 style="margin-top:10px">Due</h2>
+      <div>{{ invoice.due_on }}</div>
+    </div>
+  </section>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="right">Qty</th>
+        <th class="right">Unit price</th>
+        <th class="right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ for item in items }}
+      <tr>
+        <td>{{ item.description }}</td>
+        <td class="right">{{ item.quantity }}</td>
+        <td class="right">{{ item.unit_price | math.format "n2" }} {{ invoice.currency }}</td>
+        <td class="right">{{ (item.quantity * item.unit_price) | math.format "n2" }} {{ invoice.currency }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="4" class="muted">No line items.</td></tr>
+      {{ end }}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3" class="right muted">Subtotal</td>
+        <td class="right">{{ totals.subtotal | math.format "n2" }} {{ invoice.currency }}</td>
+      </tr>
+      {{ if totals.tax }}
+      <tr>
+        <td colspan="3" class="right muted">Tax</td>
+        <td class="right">{{ totals.tax | math.format "n2" }} {{ invoice.currency }}</td>
+      </tr>
+      {{ end }}
+      <tr class="total">
+        <td colspan="3" class="right">Total due</td>
+        <td class="right">{{ totals.total | math.format "n2" }} {{ invoice.currency }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  {{ if invoice.notes }}
+  <footer>{{ invoice.notes }}</footer>
+  {{ end }}
+
+</body>
+</html>

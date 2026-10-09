@@ -1,0 +1,149 @@
+# PDF Builder — ready-to-run requests.
+# VS Code: install the "REST Client" extension, then click "Send Request" above any block.
+# Rider and Visual Studio open .http files natively.
+#
+# Set @host to 8080 when running under Docker.
+
+@host = http://localhost:5052
+
+
+### Liveness — the process is up. Works with no broker.
+GET {{host}}/health/live
+
+
+### Readiness — the broker is connected and the template directory exists.
+# 503 here with everything else working almost always means RabbitMQ is unreachable.
+GET {{host}}/health/ready
+
+
+### Happy path — the full sample invoice.
+# @name enqueue
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{
+  "templateId": "invoice",
+  "data": {
+    "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo, Egypt", "tax_id": "100-200-300" },
+    "customer": { "name": "Acme Trading LLC", "address": "44 Market Road, Dubai, UAE" },
+    "invoice": {
+      "number": "INV-2026-0041",
+      "issued_on": "2026-10-01",
+      "due_on": "2026-10-31",
+      "currency": "USD",
+      "notes": "Payment due within 30 days. Late payments accrue 1.5% monthly interest."
+    },
+    "items": [
+      { "description": "Platform subscription - October", "quantity": 1,  "unit_price": 1200.00 },
+      { "description": "Additional seats",                "quantity": 12, "unit_price": 25.00 },
+      { "description": "Onboarding workshop",             "quantity": 2,  "unit_price": 450.00 }
+    ],
+    "totals": { "subtotal": 2400.00, "tax": 336.00, "total": 2736.00 }
+  }
+}
+
+
+### Poll the job from the request above.
+GET {{host}}/api/pdf/jobs/{{enqueue.response.body.jobId}}
+
+
+### Download the PDF the job produced.
+GET {{host}}/files/{{enqueue.response.body.fileId}}
+
+
+### Minimal payload — every optional field omitted.
+# No tax_id, no notes, no tax line. Those sections should simply not appear.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{
+  "templateId": "invoice",
+  "data": {
+    "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
+    "customer": { "name": "Walk-in Customer", "address": "-" },
+    "invoice":  { "number": "INV-0001", "issued_on": "2026-10-07", "due_on": "2026-10-07", "currency": "EGP" },
+    "items":    [ { "description": "One-off service", "quantity": 1, "unit_price": 500 } ],
+    "totals":   { "subtotal": 500, "total": 500 }
+  }
+}
+
+
+### Empty item list — exercises the template's `else` branch.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{
+  "templateId": "invoice",
+  "data": {
+    "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
+    "customer": { "name": "Acme Trading LLC", "address": "44 Market Road, Dubai" },
+    "invoice":  { "number": "INV-EMPTY", "issued_on": "2026-10-07", "due_on": "2026-11-07", "currency": "USD" },
+    "items":    [],
+    "totals":   { "subtotal": 0, "total": 0 }
+  }
+}
+
+
+### Number handling — money keeps its decimals, big integers stay readable.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{
+  "templateId": "invoice",
+  "data": {
+    "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
+    "customer": { "name": "Precision Test Co", "address": "Nowhere" },
+    "invoice":  { "number": "INV-PRECISION", "issued_on": "2026-10-07", "due_on": "2026-11-07", "currency": "USD" },
+    "items": [
+      { "description": "Exact decimal", "quantity": 3,   "unit_price": 0.1 },
+      { "description": "Large value",   "quantity": 1,   "unit_price": 1234567890.12 },
+      { "description": "Fractional qty","quantity": 2.5, "unit_price": 40 }
+    ],
+    "totals": { "subtotal": 1234567990.42, "total": 1234567990.42 }
+  }
+}
+
+
+# ───────────────────────── failure cases ─────────────────────────
+# The first three are refused at the edge and need no broker at all.
+
+### 400 — template id could escape the template directory.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{ "templateId": "../../etc/passwd", "data": {} }
+
+
+### 400 — data is an array, not an object.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{ "templateId": "invoice", "data": [1, 2, 3] }
+
+
+### 400 — template id is missing.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{ "data": { "anything": true } }
+
+
+### 202, then the job fails with TEMPLATE_NOT_FOUND.
+# Well-formed, so it is queued; the worker is what discovers there is no such template.
+# @name missingTemplate
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{ "templateId": "does-not-exist", "data": { "anything": true } }
+
+
+### Poll it — expect "Failed" with errorCode TEMPLATE_NOT_FOUND.
+GET {{host}}/api/pdf/jobs/{{missingTemplate.response.body.jobId}}
+
+
+### 404 — a job id nobody issued.
+GET {{host}}/api/pdf/jobs/00000000-0000-0000-0000-000000000001
+
+
+### 404 — a file id that is not one we hand out.
+GET {{host}}/files/not-a-real-file-id
