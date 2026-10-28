@@ -24,7 +24,7 @@ took. `-Open` opens it in the default viewer.
 
 ```powershell
 # a different template
-./samples/Invoke-PdfJob.ps1 -PayloadPath samples/minimal.json -TemplateId receipt
+./samples/Invoke-PdfJob.ps1 -PayloadPath samples/minimal.json -TemplateKey receipt
 
 # against the Docker stack instead of `dotnet run`
 ./samples/Invoke-PdfJob.ps1 -PayloadPath samples/multipage.json -BaseUrl http://localhost:8080
@@ -48,7 +48,7 @@ accepted and then fails in the worker with `TEMPLATE_NOT_FOUND`.
 ```bash
 curl -X POST http://localhost:5052/api/pdf/jobs \
   -H 'Content-Type: application/json' \
-  -d "{\"templateId\":\"invoice\",\"data\":$(cat templates/invoice.sample.json)}"
+  -d "{\"templateKey\":\"invoice\",\"data\":$(cat templates/invoice.sample.json)}"
 
 curl http://localhost:5052/api/pdf/jobs/<jobId>
 curl -o invoice.pdf http://localhost:5052/files/<fileId>
@@ -66,5 +66,5 @@ the *copy in the build output*, so rebuild (or copy the file across) after editi
 Under `docker compose` the folder is mounted, so editing is enough.
 
 **A 400 never reaches the queue.** Edge validation runs the command's own validator, so a bad
-template id or a non-object payload is refused before anything is published. If you get a `jobId`,
+template key or a non-object payload is refused before anything is published. If you get a `jobId`,
 the request was well formed and any failure after that is the worker's.

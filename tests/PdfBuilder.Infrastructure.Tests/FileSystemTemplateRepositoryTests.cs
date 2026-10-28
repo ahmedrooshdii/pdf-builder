@@ -29,15 +29,15 @@ public sealed class FileSystemTemplateRepositoryTests : IDisposable
     private void WriteFile(string name, string content) => File.WriteAllText(Path.Combine(_root, name), content);
 
     [Fact]
-    public async Task Loads_a_template_by_id()
+    public async Task Loads_a_template_by_key()
     {
         WriteFile("invoice.html", "<p>hello</p>");
 
-        var template = await _repository.GetByIdAsync("invoice", Ct);
+        var template = await _repository.GetByKeyAsync("invoice", Ct);
 
         Assert.NotNull(template);
-        Assert.Equal("invoice", template.Id);
-        Assert.Equal("<p>hello</p>", template.Html);
+        Assert.Equal("invoice", template.Key);
+        Assert.Equal("<p>hello</p>", template.Content.Html);
     }
 
     [Fact]
@@ -45,9 +45,9 @@ public sealed class FileSystemTemplateRepositoryTests : IDisposable
     {
         WriteFile("plain.html", "<p>x</p>");
 
-        var template = await _repository.GetByIdAsync("plain", Ct);
+        var template = await _repository.GetByKeyAsync("plain", Ct);
 
-        Assert.Equal(PdfRenderOptions.Default, template!.Options);
+        Assert.Equal(PdfRenderOptions.Default, template!.Content.Options);
     }
 
     [Fact]
@@ -58,16 +58,16 @@ public sealed class FileSystemTemplateRepositoryTests : IDisposable
             "label.options.json",
             """{ "format": "Letter", "landscape": true, "margins": { "top": "5mm", "left": "6mm" } }""");
 
-        var template = await _repository.GetByIdAsync("label", Ct);
+        var template = await _repository.GetByKeyAsync("label", Ct);
 
-        Assert.Equal("Letter", template!.Options.Format);
-        Assert.True(template.Options.Landscape);
-        Assert.Equal("5mm", template.Options.Margins.Top);
-        Assert.Equal("6mm", template.Options.Margins.Left);
+        Assert.Equal("Letter", template!.Content.Options.Format);
+        Assert.True(template.Content.Options.Landscape);
+        Assert.Equal("5mm", template.Content.Options.Margins.Top);
+        Assert.Equal("6mm", template.Content.Options.Margins.Left);
 
         // Members the sidecar does not mention keep their defaults.
-        Assert.Equal("10mm", template.Options.Margins.Right);
-        Assert.True(template.Options.PrintBackground);
+        Assert.Equal("10mm", template.Content.Options.Margins.Right);
+        Assert.True(template.Content.Options.PrintBackground);
     }
 
     [Fact]
@@ -76,24 +76,24 @@ public sealed class FileSystemTemplateRepositoryTests : IDisposable
         WriteFile("broken.html", "<p>x</p>");
         WriteFile("broken.options.json", "{ not json");
 
-        var template = await _repository.GetByIdAsync("broken", Ct);
+        var template = await _repository.GetByKeyAsync("broken", Ct);
 
         Assert.NotNull(template);
-        Assert.Equal(PdfRenderOptions.Default, template.Options);
+        Assert.Equal(PdfRenderOptions.Default, template.Content.Options);
     }
 
     [Fact]
     public async Task Returns_null_for_an_unknown_template()
     {
-        Assert.Null(await _repository.GetByIdAsync("nope", Ct));
+        Assert.Null(await _repository.GetByKeyAsync("nope", Ct));
     }
 
     [Theory]
     [InlineData("../secret")]
     [InlineData("sub/invoice")]
     [InlineData("")]
-    public async Task Refuses_ids_that_point_outside_the_template_directory(string templateId)
+    public async Task Refuses_keys_that_point_outside_the_template_directory(string templateKey)
     {
-        Assert.Null(await _repository.GetByIdAsync(templateId, Ct));
+        Assert.Null(await _repository.GetByKeyAsync(templateKey, Ct));
     }
 }

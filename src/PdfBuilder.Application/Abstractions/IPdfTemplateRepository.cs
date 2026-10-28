@@ -2,9 +2,12 @@ using PdfBuilder.Domain.Templates;
 
 namespace PdfBuilder.Application.Abstractions;
 
-/// <summary>Where templates are looked up. Implemented over the file system today.</summary>
+/// <summary>What the render pipeline asks for: the template a job should print, by key.</summary>
 public interface IPdfTemplateRepository
 {
-    /// <returns>The template, or <c>null</c> when no template is registered under <paramref name="templateId"/>.</returns>
-    Task<PdfTemplate?> GetByIdAsync(string templateId, CancellationToken cancellationToken = default);
+    /// <returns>
+    /// The printable template, or <c>null</c> when nothing usable is registered under
+    /// <paramref name="templateKey"/>, including when an authored template exists but has never been published.
+    /// </returns>
+    Task<PdfTemplate?> GetByKeyAsync(string templateKey, CancellationToken cancellationToken = default);
 }

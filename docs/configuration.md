@@ -106,11 +106,13 @@ throughput is. It is a development broker, not a production one.
 ## TemplateStore
 
 ```json
-"TemplateStore": { "RootPath": "Templates" }
+"TemplateStore": { "RootPath": "Templates", "AuthoredRootPath": "data/templates" }
 ```
 
-Directory holding `{templateId}.html` files. `/app/Templates` in the container, where
-`compose.yaml` mounts the repository's `templates/` folder read-only.
+| Key | Default | Notes |
+| --- | --- | --- |
+| `RootPath` | `Templates` | The built-in templates: `{templateKey}.html`, with optional `.options.json` and `.sample.json` siblings. `/app/Templates` in the container, where `compose.yaml` mounts the repository's `templates/` folder read-only and CI replaces it on every deploy. |
+| `AuthoredRootPath` | `data/templates` | Templates written in the web app, one `{templateKey}.json` each. Must be writable and must survive deploys: `/data/templates` in the container, on the data volume. Never point it inside `RootPath`, which CI wipes. |
 
 ## TemplateEngine
 
@@ -134,7 +136,7 @@ Directory holding `{templateId}.html` files. `/app/Templates` in the container, 
 
 ## Logging
 
-Standard ASP.NET Core configuration. The consumer attaches `CorrelationId` and `TemplateId` to a log
+Standard ASP.NET Core configuration. The consumer attaches `CorrelationId` and `TemplateKey` to a log
 scope, so a structured sink can show every line for one job together.
 
 ```json
@@ -157,6 +159,7 @@ RabbitMq__Password=…
 Storage__PublicBaseUrl=https://pdf.example.com
 Storage__RootPath=/data/files
 TemplateStore__RootPath=/app/Templates
+TemplateStore__AuthoredRootPath=/data/templates
 Playwright__MaxConcurrentRenders=4
 ASPNETCORE_ENVIRONMENT=Production
 ```

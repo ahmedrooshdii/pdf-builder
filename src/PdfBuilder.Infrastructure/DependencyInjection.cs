@@ -27,7 +27,8 @@ public static class DependencyInjection
             // All singletons: each is either stateless or explicitly thread-safe, and
             // PlaywrightPdfRenderer must be one because it owns the shared Chromium process.
             services.AddSingleton<ITemplateEngine, ScribanTemplateEngine>();
-            services.AddSingleton<IPdfTemplateRepository, FileSystemTemplateRepository>();
+            services.AddSingleton<IBuiltInTemplateSource, FileSystemTemplateRepository>();
+            services.AddSingleton<IAuthoredTemplateStore, FileAuthoredTemplateStore>();
             services.AddSingleton<IPdfRenderer, PlaywrightPdfRenderer>();
             services.AddSingleton<IFileStorage, LocalFileStorage>();
             services.AddSingleton<IPdfJobStore, InMemoryPdfJobStore>();

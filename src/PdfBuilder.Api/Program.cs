@@ -18,6 +18,7 @@ builder.Services
     .AddOpenApi();
 
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 var app = builder.Build();
 
@@ -39,6 +40,7 @@ app.MapHealthChecks("/health/ready");
 
 app.MapPdfJobEndpoints();
 app.MapFileEndpoints();
+app.MapTemplateEndpoints();
 
 app.Run();
 

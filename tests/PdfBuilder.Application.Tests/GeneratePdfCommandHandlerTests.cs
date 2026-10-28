@@ -25,7 +25,7 @@ public sealed class GeneratePdfCommandHandlerTests
     public async Task Renders_the_template_then_stores_the_result()
     {
         var template = new PdfTemplate("invoice", "<p>{{ total }}</p>");
-        _templates.GetByIdAsync("invoice", Arg.Any<CancellationToken>()).Returns(template);
+        _templates.GetByKeyAsync("invoice", Arg.Any<CancellationToken>()).Returns(template);
         _engine.RenderAsync(template.Html, "{\"total\":9}", Arg.Any<CancellationToken>()).Returns("<p>9</p>");
         _renderer.RenderAsync("<p>9</p>", template.Options, Arg.Any<CancellationToken>()).Returns(PdfBytes);
         _storage.SaveAsync(PdfBytes, "application/pdf", Arg.Any<CancellationToken>())
@@ -43,7 +43,7 @@ public sealed class GeneratePdfCommandHandlerTests
     {
         var options = PdfRenderOptions.Default with { Landscape = true, Format = "Letter" };
         var template = new PdfTemplate("label", "<p>x</p>", options);
-        _templates.GetByIdAsync("label", Arg.Any<CancellationToken>()).Returns(template);
+        _templates.GetByKeyAsync("label", Arg.Any<CancellationToken>()).Returns(template);
         _engine.RenderAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("<p>x</p>");
         _renderer.RenderAsync(Arg.Any<string>(), Arg.Any<PdfRenderOptions>(), Arg.Any<CancellationToken>()).Returns(PdfBytes);
         _storage.SaveAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -57,7 +57,7 @@ public sealed class GeneratePdfCommandHandlerTests
     [Fact]
     public async Task Fails_permanently_when_the_template_is_unknown()
     {
-        _templates.GetByIdAsync("missing", Arg.Any<CancellationToken>()).Returns((PdfTemplate?)null);
+        _templates.GetByKeyAsync("missing", Arg.Any<CancellationToken>()).Returns((PdfTemplate?)null);
 
         var exception = await Assert.ThrowsAsync<TemplateNotFoundException>(
             () => CreateHandler().Handle(new GeneratePdfCommand("missing", "{}"), Ct));
@@ -71,7 +71,7 @@ public sealed class GeneratePdfCommandHandlerTests
     public async Task Stores_nothing_when_rendering_fails()
     {
         var template = new PdfTemplate("invoice", "<p>x</p>");
-        _templates.GetByIdAsync("invoice", Arg.Any<CancellationToken>()).Returns(template);
+        _templates.GetByKeyAsync("invoice", Arg.Any<CancellationToken>()).Returns(template);
         _engine.RenderAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("<p>x</p>");
         _renderer.RenderAsync(Arg.Any<string>(), Arg.Any<PdfRenderOptions>(), Arg.Any<CancellationToken>())
             .Returns<byte[]>(_ => throw new PdfRenderException("browser crashed"));
