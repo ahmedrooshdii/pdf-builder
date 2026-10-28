@@ -25,6 +25,9 @@ services:
 
       Storage__RootPath: /data/files
       TemplateStore__RootPath: /app/Templates
+      # Templates written in the web app. On the volume, unlike the built-in ones above, so they
+      # survive every deploy; CI never touches this directory.
+      TemplateStore__AuthoredRootPath: /data/templates
 
       # 2 OCPU on the Always Free tier. Each concurrent render costs roughly a browser tab, and
       # rendering is CPU-bound, so going past the core count buys queueing rather than throughput.

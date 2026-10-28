@@ -54,7 +54,7 @@ internal static class PdfJobEndpoints
 
         // Reuse the command's validator rather than restating its rules here, so an obviously bad
         // request is refused with a 400 instead of being queued only to fail a second later.
-        var command = new GeneratePdfCommand(request.TemplateId ?? string.Empty, payload);
+        var command = new GeneratePdfCommand(request.TemplateKey ?? string.Empty, payload);
         var validation = await validator.ValidateAsync(command, ct);
         if (!validation.IsValid)
             return Results.ValidationProblem(validation.ToDictionary());
@@ -63,12 +63,12 @@ internal static class PdfJobEndpoints
 
         // Recorded before publishing, so a fast worker cannot finish the job and have its result
         // overwritten by a Pending entry written afterwards.
-        await jobs.SaveAsync(PdfJob.Enqueued(jobId, command.TemplateId, clock.GetUtcNow()), ct);
+        await jobs.SaveAsync(PdfJob.Enqueued(jobId, command.TemplateKey, clock.GetUtcNow()), ct);
 
         await bus.Publish<IGeneratePdfRequest>(new
         {
             CorrelationId = jobId,
-            command.TemplateId,
+            command.TemplateKey,
             JsonPayload = payload
         }, ct);
 
@@ -88,15 +88,15 @@ internal static class PdfJobEndpoints
 }
 
 /// <summary>Body of <c>POST /api/pdf/jobs</c>.</summary>
-/// <param name="TemplateId">Id of a registered template, for example <c>invoice</c>.</param>
+/// <param name="TemplateKey">Id of a registered template, for example <c>invoice</c>.</param>
 /// <param name="Data">A JSON object bound to the template.</param>
-internal sealed record GeneratePdfRequest(string? TemplateId, JsonElement Data);
+internal sealed record GeneratePdfRequest(string? TemplateKey, JsonElement Data);
 
 internal sealed record JobAcceptedResponse(Guid JobId, string StatusUrl);
 
 internal sealed record JobStatusResponse(
     Guid JobId,
-    string TemplateId,
+    string TemplateKey,
     string Status,
     DateTimeOffset EnqueuedAt,
     DateTimeOffset? CompletedAt,
@@ -108,7 +108,7 @@ internal sealed record JobStatusResponse(
 {
     public static JobStatusResponse From(PdfJob job) => new(
         job.JobId,
-        job.TemplateId,
+        job.TemplateKey,
         job.Status.ToString(),
         job.EnqueuedAt,
         job.CompletedAt,

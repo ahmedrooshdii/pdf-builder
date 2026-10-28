@@ -127,7 +127,7 @@ JavaScript is also off, because payload data is untrusted and Scriban does not a
 ### Page setup belongs to the template
 
 `PdfRenderOptions` existed before but nothing could supply it, so every document came out A4
-portrait. A template may now ship a sibling `{templateId}.options.json`; see
+portrait. A template may now ship a sibling `{templateKey}.options.json`; see
 [templates.md](templates.md#page-setup).
 
 ## Dependency notes

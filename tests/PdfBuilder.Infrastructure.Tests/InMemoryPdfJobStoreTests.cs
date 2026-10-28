@@ -31,7 +31,7 @@ public sealed class InMemoryPdfJobStoreTests
 
         Assert.NotNull(job);
         Assert.Equal(PdfJobStatus.Pending, job.Status);
-        Assert.Equal("invoice", job.TemplateId);
+        Assert.Equal("invoice", job.TemplateKey);
         Assert.Null(job.CompletedAt);
     }
 
@@ -78,7 +78,7 @@ public sealed class InMemoryPdfJobStoreTests
         var failed = pending.Fail("RENDER_FAILED", "crashed", Now.AddMinutes(1));
 
         Assert.Equal(jobId, failed.JobId);
-        Assert.Equal("invoice", failed.TemplateId);
+        Assert.Equal("invoice", failed.TemplateKey);
         Assert.Equal(Now, failed.EnqueuedAt);
     }
 }

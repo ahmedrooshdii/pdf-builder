@@ -22,7 +22,7 @@ POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
 {
-  "templateId": "invoice",
+  "templateKey": "invoice",
   "data": {
     "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo, Egypt", "tax_id": "100-200-300" },
     "customer": { "name": "Acme Trading LLC", "address": "44 Market Road, Dubai, UAE" },
@@ -57,7 +57,7 @@ POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
 {
-  "templateId": "invoice",
+  "templateKey": "invoice",
   "data": {
     "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
     "customer": { "name": "Walk-in Customer", "address": "-" },
@@ -73,7 +73,7 @@ POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
 {
-  "templateId": "invoice",
+  "templateKey": "invoice",
   "data": {
     "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
     "customer": { "name": "Acme Trading LLC", "address": "44 Market Road, Dubai" },
@@ -89,7 +89,7 @@ POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
 {
-  "templateId": "invoice",
+  "templateKey": "invoice",
   "data": {
     "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
     "customer": { "name": "Precision Test Co", "address": "Nowhere" },
@@ -107,21 +107,21 @@ Content-Type: application/json
 # ───────────────────────── failure cases ─────────────────────────
 # The first three are refused at the edge and need no broker at all.
 
-### 400 — template id could escape the template directory.
+### 400 — template key could escape the template directory.
 POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
-{ "templateId": "../../etc/passwd", "data": {} }
+{ "templateKey": "../../etc/passwd", "data": {} }
 
 
 ### 400 — data is an array, not an object.
 POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
-{ "templateId": "invoice", "data": [1, 2, 3] }
+{ "templateKey": "invoice", "data": [1, 2, 3] }
 
 
-### 400 — template id is missing.
+### 400 — template key is missing.
 POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
@@ -134,7 +134,7 @@ Content-Type: application/json
 POST {{host}}/api/pdf/jobs
 Content-Type: application/json
 
-{ "templateId": "does-not-exist", "data": { "anything": true } }
+{ "templateKey": "does-not-exist", "data": { "anything": true } }
 
 
 ### Poll it — expect "Failed" with errorCode TEMPLATE_NOT_FOUND.

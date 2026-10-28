@@ -27,7 +27,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     ASPNETCORE_HTTP_PORTS=8080 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     Storage__RootPath=/data/files \
-    TemplateStore__RootPath=/app/Templates
+    TemplateStore__RootPath=/app/Templates \
+    TemplateStore__AuthoredRootPath=/data/templates
 
 # Chromium renders missing-glyph boxes without fonts installed, which is most visible on
 # non-Latin scripts and emoji. Add more families here if your templates need other scripts.
@@ -51,7 +52,7 @@ RUN set -eux; \
     esac; \
     ./.playwright/node/$pw/node ./.playwright/package/cli.js install --with-deps chromium; \
     rm -rf /var/lib/apt/lists/*; \
-    mkdir -p /data/files; \
+    mkdir -p /data/files /data/templates; \
     chown -R app:app /data /ms-playwright
 
 USER app

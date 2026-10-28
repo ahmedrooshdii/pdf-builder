@@ -10,7 +10,7 @@
     A JSON file holding the template data. This is the "data" field of the request, not the whole
     request body: the script wraps it for you.
 
-.PARAMETER TemplateId
+.PARAMETER TemplateKey
     Which registered template to render. Defaults to "invoice".
 
 .PARAMETER BaseUrl
@@ -33,7 +33,7 @@ param(
     [Parameter(Mandatory)]
     [string] $PayloadPath,
 
-    [string] $TemplateId = 'invoice',
+    [string] $TemplateKey = 'invoice',
     [string] $BaseUrl = 'http://localhost:5052',
     [string] $OutFile,
     [int]    $TimeoutSeconds = 120,
@@ -52,9 +52,9 @@ if (-not $OutFile) {
 # Parsed and re-serialised rather than pasted in as text, so a malformed payload is caught here
 # with a clear error instead of arriving at the API as an unreadable 400.
 $data = Get-Content $PayloadPath -Raw | ConvertFrom-Json
-$body = @{ templateId = $TemplateId; data = $data } | ConvertTo-Json -Depth 20 -Compress
+$body = @{ templateKey = $TemplateKey; data = $data } | ConvertTo-Json -Depth 20 -Compress
 
-Write-Host "POST $BaseUrl/api/pdf/jobs  (template: $TemplateId)" -ForegroundColor Cyan
+Write-Host "POST $BaseUrl/api/pdf/jobs  (template: $TemplateKey)" -ForegroundColor Cyan
 
 try {
     $accepted = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/pdf/jobs" `

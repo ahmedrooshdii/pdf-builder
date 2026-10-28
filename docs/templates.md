@@ -1,6 +1,6 @@
 # Writing templates
 
-A template is an HTML file in the template directory, named `{templateId}.html`. The id in the
+A template is an HTML file in the template directory, named `{templateKey}.html`. The id in the
 request is the file name without the extension, so `invoice.html` is requested as `"invoice"`.
 
 Templates use [Scriban](https://github.com/scriban/scriban). The payload object is the root scope,
@@ -34,7 +34,7 @@ on `DOMContentLoaded` will not work. Render charts server-side into an inline SV
 
 ## Page setup
 
-Put a sibling `{templateId}.options.json` next to the template. Every field is optional:
+Put a sibling `{templateKey}.options.json` next to the template. Every field is optional:
 
 ```json
 {
@@ -138,10 +138,49 @@ Scriban reports, in the form `<input>(line,column) : error : …`.
 Run staging and your template tests strict, and production lenient. That catches typos before they
 ship without letting one missing optional field fail a batch.
 
-## Adding a template
+## Two kinds of template
 
-1. Drop `{templateId}.html` into `templates/` (and a `.options.json` if the page setup is not A4
-   portrait).
+| | Authored | Built-in |
+| --- | --- | --- |
+| Written in | the web app (Templates), or `/api/templates` | `templates/` in this repository |
+| Stored in | `TemplateStore:AuthoredRootPath`, one `{templateKey}.json` each, on the data volume | `TemplateStore:RootPath`, replaced by CI on every deploy |
+| CSS | its own stylesheet, injected before `</head>` when printed | inside the HTML |
+| Changed by | saving a draft, then publishing it | a commit |
+
+Keys are unique across both, ignoring letter case. A built-in template is read-only in the web app;
+**Duplicate** copies it into an authored draft you can edit.
+
+### Drafts and publishing
+
+An authored template always has a draft, which is what you edit, and gains a published version the
+first time you publish. **Jobs only ever render the published version**: a template that has never
+been published is reported to jobs as `TEMPLATE_NOT_FOUND`, and editing a published template
+changes nothing for jobs until you publish again. The list shows this as *Draft*, *Published* or
+*Unpublished changes*.
+
+Publishing first renders the draft with its own sample data, and refuses with the engine's message
+(and the line at fault) if that fails, so a broken template is never published. The editor's live
+preview runs the same render as you type, without saving or starting a browser; page size and page
+breaks only show in a real job.
+
+Every save and publish carries the revision it was based on. If someone else saved in between, the
+change is refused with `409 TEMPLATE_REVISION_CONFLICT` rather than overwriting their work.
+
+```
+GET    /api/templates                      list, both kinds
+GET    /api/templates/{key}                draft and published content
+POST   /api/templates                      { "templateKey": "letter" }  -> new draft from an example
+PUT    /api/templates/{key}/draft          { "revision": 3, "content": { "html", "css", "sampleJson", "options" } }
+POST   /api/templates/{key}/publish        { "revision": 4 }   -> 422 if it does not render
+POST   /api/templates/{key}/duplicate      { "templateKey": "letter-v2" }
+DELETE /api/templates/{key}                authored only
+POST   /api/templates/preview              { "content": { … } }  -> text/html
+```
+
+## Adding a built-in template
+
+1. Drop `{templateKey}.html` into `templates/` (and a `.options.json` if the page setup is not A4
+   portrait, and a `.sample.json` for previews and "Load sample").
 2. Under `docker compose`, `templates/` is mounted read-only into the container, so the next render
    picks up the change — no rebuild, no restart. Outside Docker, the file is copied to the output
    directory on build.
@@ -149,5 +188,5 @@ ship without letting one missing optional field fail a batch.
    so an edit takes effect immediately and reparses exactly once. Note that outside Docker the file
    being read is the copy in the build output, so rebuild after editing `templates/`.
 
-Template ids must match `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`. The id becomes a file name, so that
+Template keys must match `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`. The key becomes a file name, so that
 character set is also what stops a request reading outside the template directory.

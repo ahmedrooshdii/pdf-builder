@@ -48,12 +48,12 @@ public sealed class ShippedTemplateTests
             Options.Create(new TemplateStoreOptions { RootPath = TemplatesDirectory }),
             NullLogger<FileSystemTemplateRepository>.Instance);
 
-        var template = await repository.GetByIdAsync("invoice", Ct);
+        var template = await repository.GetByKeyAsync("invoice", Ct);
         Assert.NotNull(template);
 
         // Strict mode on purpose: the shipped sample must populate every field the template reads,
         // otherwise the example teaches the wrong payload shape.
-        var html = await engine.RenderAsync(template.Html, payload, Ct);
+        var html = await engine.RenderAsync(template.Content.Html, payload, Ct);
 
         Assert.Contains("Acme Trading LLC", html, StringComparison.Ordinal);
         Assert.Contains("INV-2026-0041", html, StringComparison.Ordinal);
@@ -92,8 +92,8 @@ public sealed class ShippedTemplateTests
             new MemoryCache(new MemoryCacheOptions()),
             Options.Create(new TemplateEngineOptions()));
 
-        var template = await repository.GetByIdAsync("invoice", Ct);
-        var html = await engine.RenderAsync(template!.Html, payload, Ct);
+        var template = await repository.GetByKeyAsync("invoice", Ct);
+        var html = await engine.RenderAsync(template!.Content.Html, payload, Ct);
 
         Assert.Contains("</html>", html, StringComparison.Ordinal);
         Assert.DoesNotContain("{{", html, StringComparison.Ordinal);
@@ -117,14 +117,14 @@ public sealed class ShippedTemplateTests
             new MemoryCache(new MemoryCacheOptions()),
             Options.Create(new TemplateEngineOptions()));
 
-        var template = await repository.GetByIdAsync("invoice", Ct);
-        var html = await engine.RenderAsync(template!.Html, payload, Ct);
+        var template = await repository.GetByKeyAsync("invoice", Ct);
+        var html = await engine.RenderAsync(template!.Content.Html, payload, Ct);
 
         await using var renderer = new PlaywrightPdfRenderer(
             Options.Create(new PlaywrightOptions { MaxConcurrentRenders = 1 }),
             NullLogger<PlaywrightPdfRenderer>.Instance);
 
-        var pdf = await renderer.RenderAsync(html, template.Options, Ct);
+        var pdf = await renderer.RenderAsync(html, template.Content.Options, Ct);
 
         Assert.Equal("%PDF-", Encoding.ASCII.GetString(pdf, 0, 5));
 

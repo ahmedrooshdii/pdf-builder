@@ -11,9 +11,9 @@ public sealed class GeneratePdfCommandValidatorTests
     [InlineData("credit-note")]
     [InlineData("statement_v2")]
     [InlineData("A1")]
-    public void Accepts_well_formed_template_ids(string templateId)
+    public void Accepts_well_formed_template_ids(string templateKey)
     {
-        var result = _validator.Validate(new GeneratePdfCommand(templateId, "{}"));
+        var result = _validator.Validate(new GeneratePdfCommand(templateKey, "{}"));
 
         Assert.True(result.IsValid);
     }
@@ -28,12 +28,12 @@ public sealed class GeneratePdfCommandValidatorTests
     [InlineData("..")]
     [InlineData("sub/invoice")]
     [InlineData(@"sub\invoice")]
-    public void Rejects_template_ids_that_could_escape_the_template_directory(string templateId)
+    public void Rejects_template_ids_that_could_escape_the_template_directory(string templateKey)
     {
-        var result = _validator.Validate(new GeneratePdfCommand(templateId, "{}"));
+        var result = _validator.Validate(new GeneratePdfCommand(templateKey, "{}"));
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.PropertyName == nameof(GeneratePdfCommand.TemplateId));
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(GeneratePdfCommand.TemplateKey));
     }
 
     [Fact]

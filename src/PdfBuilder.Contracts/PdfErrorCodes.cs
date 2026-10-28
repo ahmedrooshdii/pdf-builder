@@ -7,7 +7,7 @@ namespace PdfBuilder.Contracts;
 /// </summary>
 public static class PdfErrorCodes
 {
-    /// <summary>The request did not satisfy the contract (empty template id, payload is not a JSON object, …).</summary>
+    /// <summary>The request did not satisfy the contract (empty template key, payload is not a JSON object, …).</summary>
     public const string ValidationFailed = "VALIDATION_FAILED";
 
     /// <summary>No template is registered under the requested id.</summary>

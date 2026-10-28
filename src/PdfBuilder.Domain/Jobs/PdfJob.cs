@@ -13,7 +13,7 @@ public sealed record PdfJob
     private PdfJob() { }
 
     public required Guid JobId { get; init; }
-    public required string TemplateId { get; init; }
+    public required string TemplateKey { get; init; }
     public required PdfJobStatus Status { get; init; }
     public required DateTimeOffset EnqueuedAt { get; init; }
 
@@ -24,10 +24,10 @@ public sealed record PdfJob
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
 
-    public static PdfJob Enqueued(Guid jobId, string templateId, DateTimeOffset enqueuedAt) => new()
+    public static PdfJob Enqueued(Guid jobId, string templateKey, DateTimeOffset enqueuedAt) => new()
     {
         JobId = jobId,
-        TemplateId = templateId,
+        TemplateKey = templateKey,
         Status = PdfJobStatus.Pending,
         EnqueuedAt = enqueuedAt
     };
