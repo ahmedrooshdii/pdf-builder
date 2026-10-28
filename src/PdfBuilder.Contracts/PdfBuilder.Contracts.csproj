@@ -4,9 +4,36 @@
     The published wire vocabulary: message contracts plus the error codes that travel on them.
     Deliberately dependency-free so any service can reference it. Every other project may
     depend on it; it depends on nothing.
+
+    Shipped to other services as a NuGet package (see .github/workflows/contracts.yml).
+    netstandard2.0 is there so a consumer on .NET Framework or an older .NET can still reference it.
   -->
   <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <IsPackable>true</IsPackable>
+    <Description>Message contracts and error codes for requesting PDFs from the PDF Builder service over MassTransit.</Description>
+    <PackageTags>pdf;masstransit;contracts;messaging</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/ahmedrooshdii/pdf-builder</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- Overridden by CI from the release tag; this is what a local `dotnet pack` produces. -->
+    <Version>1.0.0-local</Version>
+    <!--
+      Fails the pack if the public surface breaks compared to the last release. Set
+      PackageValidationBaselineVersion to the latest published version once one exists.
+    -->
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\docs\message-contracts.md" Pack="true" PackagePath="README.md" Visible="false" />
+  </ItemGroup>
 
 </Project>

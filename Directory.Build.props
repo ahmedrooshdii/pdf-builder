@@ -23,10 +23,10 @@
 
   <PropertyGroup>
     <Product>PDF Builder</Product>
-    <Company>Circle360</Company>
-    <Authors>Circle360</Authors>
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Only PdfBuilder.Contracts ships as a package; it opts back in. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
 </Project>

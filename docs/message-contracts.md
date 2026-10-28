@@ -6,6 +6,26 @@
 > RabbitMQ exchange name. Renaming or moving them stops producers and consumers matching, silently.
 > Treat these two files as published API.
 
+## Getting the package
+
+Published to nuget.org as `PdfBuilder.Contracts` (targets `netstandard2.0` and `net10.0`). No feed
+or credentials to set up: install it from the NuGet Package Manager, or
+
+```bash
+dotnet add package PdfBuilder.Contracts
+```
+
+To release a new version, tag the commit and push the tag; `.github/workflows/contracts.yml` packs
+and publishes it:
+
+```bash
+git tag contracts-v1.0.0
+git push origin contracts-v1.0.0
+```
+
+Use semantic versions. Adding a member is a minor version; renaming or removing one is a major
+version and a breaking change on the wire (see the warning above).
+
 ## IGeneratePdfRequest
 
 > **Breaking change: `TemplateId` was renamed to `TemplateKey`.** The type name and exchange did not
