@@ -1,0 +1,21 @@
+
+# ---------- Hugging Face Spaces ----------
+# CI appends this to src/PdfBuilder.Api/Dockerfile (see deploy/huggingface/README.md), so these
+# lines extend that file's final stage rather than starting a new one.
+
+# Spaces run the container as UID 1000 whatever USER says, so everything the service writes must
+# belong to that UID rather than to the image's own `app` user. A fresh directory is used instead
+# of /data because the base stage declares /data a VOLUME, and changes made to a volume path after
+# that declaration are not guaranteed to survive into the image.
+USER root
+RUN mkdir -p /home/space/files /home/space/templates \
+ && chown -R 1000:1000 /home/space
+USER 1000
+
+# HOME is set explicitly because UID 1000 may have no home directory in this image, and Chromium
+# and ASP.NET both write caches and keys under it.
+# CPU basic is 2 vCPU; past that, extra concurrent renders only queue (see deploy/compose.prod.yaml).
+ENV HOME=/home/space \
+    Storage__RootPath=/home/space/files \
+    TemplateStore__AuthoredRootPath=/home/space/templates \
+    Playwright__MaxConcurrentRenders=2
