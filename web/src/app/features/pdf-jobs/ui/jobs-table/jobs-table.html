@@ -1,0 +1,184 @@
+<div class="flex items-center gap-2">
+  <div class="relative w-full max-w-sm">
+    <app-icon name="search" class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+    <input
+      #search
+      appInput
+      type="search"
+      class="pl-8"
+      placeholder="Filter by template, status or id…"
+      aria-label="Filter jobs"
+      [value]="filter()"
+      (input)="filter.set(search.value)"
+    />
+  </div>
+  @if (selected().size > 0) {
+    <button appButton type="button" variant="destructive" class="ml-auto" (click)="removeSelected()">
+      <app-icon name="trash" data-icon="inline-start" />
+      Remove {{ selected().size }}
+    </button>
+  }
+</div>
+
+<div class="overflow-hidden rounded-lg border">
+  <div appScrollArea orientation="horizontal" aria-label="Jobs table">
+    <table appTable>
+      <thead appTableHeader>
+        <tr appTableRow class="hover:bg-transparent">
+          <th appTableHead class="w-10 pl-3">
+            <button
+              appCheckbox
+              aria-label="Select all jobs on this page"
+              [checked]="allOnPageSelected()"
+              [indeterminate]="someOnPageSelected()"
+              (checkedChange)="setPageSelected($event)"
+            ></button>
+          </th>
+          <th appTableHead [attr.aria-sort]="ariaSort('templateKey')">
+            <button appButton type="button" variant="ghost" size="sm" class="-ml-2.5" (click)="toggleSort('templateKey')">
+              Template
+              <app-icon [name]="sortIcon('templateKey')" data-icon="inline-end" class="text-muted-foreground" />
+            </button>
+          </th>
+          <th appTableHead [attr.aria-sort]="ariaSort('status')">
+            <button appButton type="button" variant="ghost" size="sm" class="-ml-2.5" (click)="toggleSort('status')">
+              Status
+              <app-icon [name]="sortIcon('status')" data-icon="inline-end" class="text-muted-foreground" />
+            </button>
+          </th>
+          <th appTableHead [attr.aria-sort]="ariaSort('enqueuedAt')">
+            <button appButton type="button" variant="ghost" size="sm" class="-ml-2.5" (click)="toggleSort('enqueuedAt')">
+              Queued
+              <app-icon [name]="sortIcon('enqueuedAt')" data-icon="inline-end" class="text-muted-foreground" />
+            </button>
+          </th>
+          <th appTableHead>Duration</th>
+          <th appTableHead class="text-right" [attr.aria-sort]="ariaSort('sizeBytes')">
+            <button appButton type="button" variant="ghost" size="sm" class="-mr-2.5" (click)="toggleSort('sizeBytes')">
+              Size
+              <app-icon [name]="sortIcon('sizeBytes')" data-icon="inline-end" class="text-muted-foreground" />
+            </button>
+          </th>
+          <th appTableHead class="w-0"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+
+      <tbody appTableBody>
+        @for (job of rows(); track job.jobId) {
+          <tr appTableRow [attr.data-state]="selected().has(job.jobId) ? 'selected' : null">
+            <td appTableCell class="pl-3">
+              <button
+                appCheckbox
+                [attr.aria-label]="'Select job ' + job.jobId"
+                [checked]="selected().has(job.jobId)"
+                (checkedChange)="setSelected(job.jobId, $event)"
+              ></button>
+            </td>
+
+            <td appTableCell>
+              <app-hover-card>
+                <a
+                  appHoverCardTrigger
+                  class="font-medium underline-offset-4 hover:underline focus-visible:underline outline-none"
+                  [routerLink]="['/jobs', job.jobId]"
+                >
+                  {{ job.templateKey }}
+                </a>
+                <div appHoverCardContent class="grid gap-2">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium">{{ job.templateKey }}</span>
+                    <app-job-status-badge [status]="job.status" />
+                  </div>
+                  <p class="font-mono text-xs break-all text-muted-foreground">{{ job.jobId }}</p>
+                  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                    <dt class="text-muted-foreground">Queued</dt>
+                    <dd>{{ job.enqueuedAt | date: 'medium' }}</dd>
+                    @if (job.completedAt) {
+                      <dt class="text-muted-foreground">Took</dt>
+                      <dd>{{ job.enqueuedAt | duration: job.completedAt }}</dd>
+                    }
+                    @if (job.sizeBytes !== null) {
+                      <dt class="text-muted-foreground">Size</dt>
+                      <dd>{{ job.sizeBytes | fileSize }}</dd>
+                    }
+                  </dl>
+                  @if (job.errorMessage) {
+                    <p class="line-clamp-3 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+                      {{ job.errorMessage }}
+                    </p>
+                  }
+                </div>
+              </app-hover-card>
+            </td>
+
+            <td appTableCell><app-job-status-badge [status]="job.status" /></td>
+
+            <td appTableCell class="text-muted-foreground">
+              <time [attr.datetime]="job.enqueuedAt">{{ job.enqueuedAt | date: 'MMM d, HH:mm:ss' }}</time>
+            </td>
+
+            <td appTableCell class="text-muted-foreground tabular-nums">
+              {{ (job.enqueuedAt | duration: job.completedAt) || '—' }}
+            </td>
+
+            <td appTableCell class="text-right tabular-nums">{{ (job.sizeBytes | fileSize) || '—' }}</td>
+
+            <td appTableCell class="pr-3">
+              <div class="flex justify-end gap-0.5">
+                @if (job.status === 'Succeeded' && job.fileId) {
+                  <a
+                    appButton
+                    variant="ghost"
+                    size="icon-sm"
+                    [href]="downloadUrlFor()(job.fileId)"
+                    [attr.download]="job.templateKey + '-' + job.jobId + '.pdf'"
+                    [attr.aria-label]="'Download PDF of job ' + job.jobId"
+                  >
+                    <app-icon name="download" />
+                  </a>
+                }
+                <a
+                  appButton
+                  variant="ghost"
+                  size="icon-sm"
+                  [routerLink]="['/jobs', job.jobId]"
+                  [attr.aria-label]="'Open job ' + job.jobId"
+                >
+                  <app-icon name="external-link" />
+                </a>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr appTableRow class="hover:bg-transparent">
+            <td appTableCell colspan="7" class="h-24 text-center text-muted-foreground">
+              {{ filter() ? 'No jobs match “' + filter() + '”.' : 'No jobs yet.' }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+  <p class="flex-1">{{ selected().size }} of {{ filtered().length }} row(s) selected.</p>
+  <p class="tabular-nums">Page {{ page() + 1 }} of {{ pageCount() }}</p>
+  <div class="flex gap-2">
+    <button appButton type="button" variant="outline" size="sm" [disabled]="page() === 0" (click)="goToPage(page() - 1)">
+      <app-icon name="chevron-left" data-icon="inline-start" />
+      Previous
+    </button>
+    <button
+      appButton
+      type="button"
+      variant="outline"
+      size="sm"
+      [disabled]="page() >= pageCount() - 1"
+      (click)="goToPage(page() + 1)"
+    >
+      Next
+      <app-icon name="chevron-right" data-icon="inline-end" />
+    </button>
+  </div>
+</div>
