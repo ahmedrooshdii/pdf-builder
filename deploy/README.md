@@ -1,5 +1,8 @@
 # Deploying to Oracle Cloud Always Free
 
+> No card, or no Ampere capacity? [huggingface/README.md](huggingface/README.md) deploys the same
+> image to a free Hugging Face Space instead.
+
 CI builds an arm64 image, pushes it to GHCR, then SSHes into a VM and restarts the container
 there. The steps below are the one-time setup that has to exist before the first deploy.
 

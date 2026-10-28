@@ -1,0 +1,29 @@
+name: Keep the Space awake
+
+# A free Space sleeps after 48 hours without HTTP requests, and a sleeping Space also stops
+# consuming the RabbitMQ queue - which receives no HTTP traffic at all. One request twice a day
+# keeps it well inside that window.
+#
+# GitHub disables scheduled workflows after 60 days with no commits to the repository; re-enable
+# this one from the Actions tab if that happens.
+
+on:
+  schedule:
+    - cron: "17 */12 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    if: vars.HF_SPACE_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # The token is only needed for a private Space; a public one ignores it.
+      - name: Request the liveness endpoint
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >
+          curl -fsS --max-time 60 --retry 3 --retry-delay 20
+          -H "Authorization: Bearer $HF_TOKEN"
+          "${{ vars.HF_SPACE_URL }}/health/live"

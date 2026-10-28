@@ -219,3 +219,83 @@ jobs:
           exit 1
           REMOTE
 
+  deploy-huggingface:
+    name: Deploy to Hugging Face Spaces
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    # Opt-in: runs only once the HF_SPACE repository variable names a Space (owner/name), so a
+    # fork or a repo without the Space configured is not left with a failing job on every push.
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push' && vars.HF_SPACE != ''
+    # The Space builds the image itself - restore, publish and the Chromium download - which
+    # takes several minutes before it even starts.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # A Space is its own repository with README.md (the Space card) and Dockerfile at its root.
+      # Only what the image build needs is copied: the Space rebuilds on every upload, and tests,
+      # docs and the web app would only make each upload larger.
+      - name: Assemble the Space
+        run: |
+          mkdir space
+          cp -r src templates Directory.Build.props Directory.Packages.props PdfBuilder.slnx space/
+          cp deploy/huggingface/space.md space/README.md
+          cat src/PdfBuilder.Api/Dockerfile deploy/huggingface/Dockerfile.space > space/Dockerfile
+
+      - name: Install the Hugging Face CLI
+        run: pipx install "huggingface_hub>=0.34"
+
+      # --delete "*" removes files from the Space that are no longer in the upload, so a template
+      # deleted here does not live on there.
+      - name: Upload to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >
+          hf upload "${{ vars.HF_SPACE }}" space .
+          --repo-type space
+          --delete "*"
+          --commit-message "Deploy ${GITHUB_SHA::7}"
+
+      # The old container keeps answering while the new image builds, so a plain health poll right
+      # after the upload would pass against the previous version. The runtime API says which
+      # stage the Space is in: wait for it to leave RUNNING (the rebuild began), then to return.
+      - name: Wait for the Space to rebuild and report ready
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE: ${{ vars.HF_SPACE }}
+          SPACE_URL: ${{ vars.HF_SPACE_URL }}
+        run: |
+          stage() {
+            curl -s --max-time 10 -H "Authorization: Bearer $HF_TOKEN" \
+              "https://huggingface.co/api/spaces/$SPACE/runtime" | jq -r '.stage'
+          }
+
+          # An upload that changed nothing triggers no rebuild, so give up waiting after two minutes.
+          for attempt in $(seq 1 24); do
+            [ "$(stage)" != "RUNNING" ] && break
+            sleep 5
+          done
+
+          for attempt in $(seq 1 240); do
+            current=$(stage)
+            case "$current" in
+              RUNNING) echo "Space is running"; break ;;
+              *ERROR)  echo "Space failed with stage $current; see the build or container logs on the Space page" >&2; exit 1 ;;
+            esac
+            sleep 10
+          done
+          [ "$current" = "RUNNING" ] || { echo "Space did not finish building; last stage $current" >&2; exit 1; }
+
+          if [ -z "$SPACE_URL" ]; then
+            echo "HF_SPACE_URL is not set; skipping the readiness check"
+            exit 0
+          fi
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+              -H "Authorization: Bearer $HF_TOKEN" "$SPACE_URL/health/ready" || true)
+            if [ "$code" = "200" ]; then echo "ready after ${attempt} attempt(s)"; exit 0; fi
+            sleep 10
+          done
+          echo "Space is running but /health/ready answered $code - usually RabbitMQ is unreachable" >&2
+          exit 1
