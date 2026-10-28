@@ -105,7 +105,7 @@ public sealed class ScribanTemplateEngine(IMemoryCache cache, IOptions<TemplateE
     }
 
     /// <summary>
-    /// Caches by content hash rather than by template id, so an edited file is reparsed
+    /// Caches by content hash rather than by template key, so an edited file is reparsed
     /// automatically and two ids with identical bodies share a single parse.
     /// </summary>
     private Template GetOrParse(string html)

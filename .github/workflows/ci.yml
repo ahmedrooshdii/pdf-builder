@@ -1,0 +1,301 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  # Keep the browser download inside the workspace so actions/cache can reach it.
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          # The version and the Microsoft.Testing.Platform runner both come from global.json.
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          # Central package management means every version lives in one file.
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore PdfBuilder.slnx
+
+      # Warnings are errors via Directory.Build.props, so this step is also the lint gate.
+      - name: Build
+        run: dotnet build PdfBuilder.slnx --configuration Release --no-restore
+
+      # Keyed on the Playwright version: a mismatched browser build fails at runtime, so the
+      # cache must miss whenever that package moves.
+      - name: Cache Chromium
+        id: cache-chromium
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: chromium-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
+
+      - name: Install Chromium
+        run: >
+          pwsh tests/PdfBuilder.Infrastructure.Tests/bin/Release/net10.0/playwright.ps1
+          install --with-deps chromium
+
+      # The browser-backed tests are the ones that prove a PDF actually comes out, that the
+      # browser recycles correctly mid-flight, and that hosts outside the allow-list are blocked.
+      # They are opt-in locally to keep the inner loop fast; CI has no reason to skip them.
+      - name: Test
+        env:
+          PDFBUILDER_RUN_BROWSER_TESTS: "1"
+        run: dotnet test PdfBuilder.slnx --configuration Release --no-build
+
+  web:
+    name: Web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      # The lint config also enforces the folder layering (features never import each other, ui
+      # components never reach services), so this step is the architecture check as well.
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --watch=false
+
+      - name: Build
+        run: npm run build
+
+  image:
+    name: Container image (arm64)
+    # Oracle's Always Free tier is Ampere, so the image has to be arm64. Building it on a native
+    # arm64 runner rather than under QEMU matters here: the Dockerfile runs apt-get and a full
+    # Chromium install, which emulation turns from minutes into the better part of an hour.
+    # These runners are free on public repositories only; a private repo must use QEMU instead.
+    runs-on: ubuntu-24.04-arm
+    needs: build-and-test
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Pull requests from forks cannot read registry credentials, and nothing should be published
+      # from an unmerged branch anyway - those runs build only, to prove the Dockerfile still works.
+      - name: Sign in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Build context is the repository root: the Dockerfile needs templates/ and the root
+      # props files, which live above src/.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/PdfBuilder.Api/Dockerfile
+          platforms: linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Oracle Cloud
+    runs-on: ubuntu-latest
+    needs: image
+    # Only the default branch deploys. Pull requests and feature branches stop at the image.
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    timeout-minutes: 15
+
+    # Create this environment in repository settings to require a manual approval before a
+    # deployment runs, and to keep the host and key scoped to it.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Open an SSH session to the VM
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pinned host key rather than StrictHostKeyChecking=no, so a swapped host fails the
+          # deploy instead of silently handing the session to whoever answers.
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Copy the compose file and templates
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          scp -i ~/.ssh/id_ed25519 deploy/compose.prod.yaml "$SSH_USER@$SSH_HOST:/opt/pdf-builder/compose.yaml"
+
+          # rsync --delete, not scp -r, for two reasons. scp only adds, so a template deleted
+          # from the repository would live on the VM forever. And the container bind-mounts this
+          # directory, so its contents must be updated in place - moving a fresh directory into
+          # position would leave the mount pointing at the old inode.
+          rsync -az --delete -e "ssh -i ~/.ssh/id_ed25519" \
+            templates/ "$SSH_USER@$SSH_HOST:/opt/pdf-builder/templates/"
+
+      - name: Pull the new image and restart
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          IMAGE: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" \
+            "cd /opt/pdf-builder && PDF_BUILDER_IMAGE='$IMAGE' docker compose up -d --pull always --remove-orphans"
+
+      # Deploying the digest built by this run, then asking the container whether it is ready,
+      # is the only part of the pipeline that proves the thing actually came back up.
+      - name: Wait for the service to report ready
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" bash -s <<'REMOTE'
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8080/health/ready || true)
+            if [ "$code" = "200" ]; then echo "ready after ${attempt} attempt(s)"; exit 0; fi
+            sleep 5
+          done
+          echo "service did not become ready; recent logs:" >&2
+          cd /opt/pdf-builder && docker compose logs --tail 60 api >&2
+          exit 1
+          REMOTE
+
+  deploy-huggingface:
+    name: Deploy to Hugging Face Spaces
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    # Opt-in: runs only once the HF_SPACE repository variable names a Space (owner/name), so a
+    # fork or a repo without the Space configured is not left with a failing job on every push.
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push' && vars.HF_SPACE != ''
+    # The Space builds the image itself - restore, publish and the Chromium download - which
+    # takes several minutes before it even starts.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # A Space is its own repository with README.md (the Space card) and Dockerfile at its root.
+      # Only what the image build needs is copied: the Space rebuilds on every upload, and tests,
+      # docs and the web app would only make each upload larger.
+      - name: Assemble the Space
+        run: |
+          mkdir space
+          cp -r src templates Directory.Build.props Directory.Packages.props PdfBuilder.slnx space/
+          cp deploy/huggingface/space.md space/README.md
+          cat src/PdfBuilder.Api/Dockerfile deploy/huggingface/Dockerfile.space > space/Dockerfile
+
+      - name: Install the Hugging Face CLI
+        run: pipx install "huggingface_hub>=0.34"
+
+      # --delete "*" removes files from the Space that are no longer in the upload, so a template
+      # deleted here does not live on there.
+      - name: Upload to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >
+          hf upload "${{ vars.HF_SPACE }}" space .
+          --repo-type space
+          --delete "*"
+          --commit-message "Deploy ${GITHUB_SHA::7}"
+
+      # The old container keeps answering while the new image builds, so a plain health poll right
+      # after the upload would pass against the previous version. The runtime API says which
+      # stage the Space is in: wait for it to leave RUNNING (the rebuild began), then to return.
+      - name: Wait for the Space to rebuild and report ready
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE: ${{ vars.HF_SPACE }}
+          SPACE_URL: ${{ vars.HF_SPACE_URL }}
+        run: |
+          stage() {
+            curl -s --max-time 10 -H "Authorization: Bearer $HF_TOKEN" \
+              "https://huggingface.co/api/spaces/$SPACE/runtime" | jq -r '.stage'
+          }
+
+          # An upload that changed nothing triggers no rebuild, so give up waiting after two minutes.
+          for attempt in $(seq 1 24); do
+            [ "$(stage)" != "RUNNING" ] && break
+            sleep 5
+          done
+
+          for attempt in $(seq 1 240); do
+            current=$(stage)
+            case "$current" in
+              RUNNING) echo "Space is running"; break ;;
+              *ERROR)  echo "Space failed with stage $current; see the build or container logs on the Space page" >&2; exit 1 ;;
+            esac
+            sleep 10
+          done
+          [ "$current" = "RUNNING" ] || { echo "Space did not finish building; last stage $current" >&2; exit 1; }
+
+          if [ -z "$SPACE_URL" ]; then
+            echo "HF_SPACE_URL is not set; skipping the readiness check"
+            exit 0
+          fi
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+              -H "Authorization: Bearer $HF_TOKEN" "$SPACE_URL/health/ready" || true)
+            if [ "$code" = "200" ]; then echo "ready after ${attempt} attempt(s)"; exit 0; fi
+            sleep 10
+          done
+          echo "Space is running but /health/ready answered $code - usually RabbitMQ is unreachable" >&2
+          exit 1

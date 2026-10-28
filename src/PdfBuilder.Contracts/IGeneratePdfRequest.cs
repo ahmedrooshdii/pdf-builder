@@ -1,6 +1,6 @@
 namespace PdfBuilder.Contracts;
 
-/// <summary>Asks the PDF service to render <see cref="TemplateId"/> bound to <see cref="JsonPayload"/>.</summary>
+/// <summary>Asks the PDF service to render <see cref="TemplateKey"/> bound to <see cref="JsonPayload"/>.</summary>
 /// <remarks>
 /// The namespace and type name form the MassTransit message URN, which becomes the RabbitMQ exchange name.
 /// Never rename or move this type once it is published, or producers and consumers stop matching.
@@ -11,7 +11,7 @@ public interface IGeneratePdfRequest
     Guid CorrelationId { get; }
 
     /// <summary>Identifier of a registered HTML template, for example <c>invoice</c>.</summary>
-    string TemplateId { get; }
+    string TemplateKey { get; }
 
     /// <summary>A JSON object, serialised as text, that is bound to the template.</summary>
     string JsonPayload { get; }

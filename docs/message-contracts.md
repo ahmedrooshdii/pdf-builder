@@ -8,10 +8,14 @@
 
 ## IGeneratePdfRequest
 
+> **Breaking change: `TemplateId` was renamed to `TemplateKey`.** The type name and exchange did not
+> change, so an old publisher still delivers, but its messages arrive with no template key and are
+> answered `VALIDATION_FAILED`. Update and deploy publishers together with this service.
+
 | Member | Type | Meaning |
 | --- | --- | --- |
 | `CorrelationId` | `Guid` | Your id for this job. Echoed on the response and attached to every log line the job produces. |
-| `TemplateId` | `string` | A registered template, e.g. `invoice`. Must match `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`. |
+| `TemplateKey` | `string` | A published template, e.g. `invoice`. Must match `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`. A draft that was never published is reported as `TEMPLATE_NOT_FOUND`. |
 | `JsonPayload` | `string` | A JSON object, serialised as text. Maximum 5 MB. |
 
 ## IGeneratePdfResponse
@@ -33,7 +37,7 @@ Follows the Claim Check pattern: the response carries a reference, never the PDF
 
 | `PdfErrorCodes` | Value | Cause |
 | --- | --- | --- |
-| `ValidationFailed` | `VALIDATION_FAILED` | Bad template id, or the payload is not a JSON object / too large. |
+| `ValidationFailed` | `VALIDATION_FAILED` | Bad template key, or the payload is not a JSON object / too large. |
 | `TemplateNotFound` | `TEMPLATE_NOT_FOUND` | No template registered under that id. |
 | `TemplateRenderFailed` | `TEMPLATE_RENDER_FAILED` | Template syntax error, or a runtime error while binding data. |
 | `RenderFailed` | `RENDER_FAILED` | The browser failed. Retried three times before you see this. |
@@ -57,7 +61,7 @@ services.AddMassTransit(x =>
 var response = await client.GetResponse<IGeneratePdfResponse>(new
 {
     CorrelationId = NewId.NextGuid(),
-    TemplateId = "invoice",
+    TemplateKey = "invoice",
     JsonPayload = JsonSerializer.Serialize(invoice)
 }, cancellationToken, timeout: RequestTimeout.After(m: 2));
 
@@ -77,7 +81,7 @@ When nothing is waiting on the result:
 await publishEndpoint.Publish<IGeneratePdfRequest>(new
 {
     CorrelationId = NewId.NextGuid(),
-    TemplateId = "invoice",
+    TemplateKey = "invoice",
     JsonPayload = json
 }, cancellationToken);
 ```

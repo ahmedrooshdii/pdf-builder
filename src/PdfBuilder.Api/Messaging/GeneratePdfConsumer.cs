@@ -28,13 +28,13 @@ public sealed class GeneratePdfConsumer(
         using var logScope = logger.BeginScope(new Dictionary<string, object>
         {
             ["CorrelationId"] = message.CorrelationId,
-            ["TemplateId"] = message.TemplateId
+            ["TemplateKey"] = message.TemplateKey
         });
 
         try
         {
             var result = await sender.Send(
-                new GeneratePdfCommand(message.TemplateId, message.JsonPayload), ct);
+                new GeneratePdfCommand(message.TemplateKey, message.JsonPayload), ct);
 
             await CompleteAsync(context, job => job.Succeed(
                 result.FileId, result.FileUrl, result.SizeBytes, clock.GetUtcNow()));
@@ -108,7 +108,7 @@ public sealed class GeneratePdfConsumer(
     {
         var message = context.Message;
         var existing = await jobs.GetAsync(message.CorrelationId, context.CancellationToken)
-                       ?? PdfJob.Enqueued(message.CorrelationId, message.TemplateId, clock.GetUtcNow());
+                       ?? PdfJob.Enqueued(message.CorrelationId, message.TemplateKey, clock.GetUtcNow());
 
         await jobs.SaveAsync(transition(existing), context.CancellationToken);
     }

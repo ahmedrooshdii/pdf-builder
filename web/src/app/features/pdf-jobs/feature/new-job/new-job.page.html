@@ -1,0 +1,103 @@
+<header class="grid gap-1">
+  <h1 class="text-2xl font-semibold tracking-tight">New PDF</h1>
+  <p class="text-sm text-muted-foreground">
+    Pick a published template and give it the JSON to fill in. The PDF renders in the background.
+  </p>
+</header>
+
+<form [formRoot]="jobForm" class="grid gap-6">
+  <div class="grid max-w-md gap-2">
+    <label appLabel for="templateKey">Template</label>
+    <div class="flex gap-2">
+      <app-select
+        class="flex-1"
+        inputId="templateKey"
+        placeholder="Choose a template"
+        emptyText="No published templates yet."
+        ariaDescribedBy="templateKey-errors templateKey-hint"
+        [options]="templateOptions()"
+        [formField]="jobForm.templateKey"
+      />
+      <button appButton type="button" variant="outline" (click)="loadSample()">
+        <app-icon name="braces" data-icon="inline-start" />
+        Load sample
+      </button>
+    </div>
+    <app-field-errors id="templateKey-errors" [field]="jobForm.templateKey()" />
+    @if (sampleMessage(); as message) {
+      <p class="text-sm text-muted-foreground">{{ message }}</p>
+    }
+    <p id="templateKey-hint" class="text-xs text-muted-foreground">
+      Published templates only.
+      <a routerLink="/templates" class="underline underline-offset-4 hover:text-foreground">Manage templates</a>
+    </p>
+  </div>
+
+  <div class="grid gap-2">
+    <div
+      appCodeBlock
+      class="h-[30rem]"
+      [variant]="showInvalid(jobForm.data()) ? 'destructive' : 'default'"
+    >
+      <div appCodeBlockHeader class="pb-1">
+        <div appCodeBlockTitle><app-icon name="braces" />payload.json</div>
+        <div appCodeBlockActions>
+          <button
+            appButton
+            type="button"
+            variant="ghost"
+            size="xs"
+            [disabled]="jobForm.data().invalid()"
+            (click)="formatPayload()"
+          >
+            <app-icon name="wand" data-icon="inline-start" />
+            Format
+          </button>
+          <app-code-block-copy-button [value]="payloadText()" label="Copy payload" />
+        </div>
+      </div>
+
+      <app-code-editor
+        class="min-h-0 flex-1 border-t"
+        ariaLabel="Payload (JSON)"
+        ariaDescribedBy="data-errors"
+        placeholder="{ &quot;customer&quot;: &quot;Acme&quot; }"
+        [formField]="jobForm.data"
+      />
+
+      <div appCodeBlockFooter class="text-xs">
+        @if (jobForm.data().invalid()) {
+          <app-icon name="circle-x" class="size-3.5 text-destructive" />
+          <span class="text-destructive">Not a JSON object yet</span>
+        } @else {
+          <app-icon name="circle-check" class="size-3.5 text-success" />
+          <span>Valid JSON object</span>
+        }
+        <span class="ml-auto tabular-nums">{{ lineCount() }} lines · {{ payloadBytes() | fileSize }}</span>
+      </div>
+    </div>
+    <app-field-errors id="data-errors" [field]="jobForm.data()" />
+  </div>
+
+  @if (formError(); as message) {
+    <div role="alert" class="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+      <app-icon name="triangle-alert" class="mt-0.5" />
+      <div class="grid gap-0.5">
+        <p class="font-medium">Could not submit the job</p>
+        <p class="text-destructive/90">{{ message }}</p>
+      </div>
+    </div>
+  }
+
+  <div class="flex justify-end">
+    <button appButton type="submit" size="lg" [disabled]="jobForm().submitting()">
+      @if (jobForm().submitting()) {
+        <app-spinner data-icon="inline-start" />
+        Submitting…
+      } @else {
+        <app-icon name="file-text" data-icon="inline-start" />
+        Generate PDF
+      }
+    </button>
+  </div>
+</form>

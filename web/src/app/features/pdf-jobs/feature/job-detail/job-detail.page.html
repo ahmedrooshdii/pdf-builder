@@ -1,0 +1,119 @@
+@if (job.hasValue()) {
+  @let j = job.value();
+
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div class="grid min-w-0 gap-1.5">
+      <div class="flex flex-wrap items-center gap-2.5">
+        <h1 class="text-2xl font-semibold tracking-tight">{{ j.templateKey }}</h1>
+        <app-job-status-badge [status]="j.status" />
+      </div>
+      <div class="flex items-center gap-1 text-sm text-muted-foreground">
+        <span class="truncate font-mono text-xs">{{ j.jobId }}</span>
+        <app-code-block-copy-button [value]="j.jobId" label="Copy job id" />
+      </div>
+    </div>
+
+    @if (downloadUrl(); as url) {
+      <div class="flex gap-2">
+        <a appButton [href]="url" [attr.download]="downloadName()">
+          <app-icon name="download" data-icon="inline-start" />
+          Download
+        </a>
+        <button appButton type="button" variant="outline" (click)="previewOpen.set(true)">
+          <app-icon name="eye" data-icon="inline-start" />
+          Preview
+        </button>
+      </div>
+    }
+  </header>
+
+  @if (isPending()) {
+    <app-progress [value]="estimatedProgress()" ariaLabel="Rendering progress (estimated)">
+      <span appProgressLabel>Rendering</span>
+      <span appProgressValue>{{ elapsedMs() | duration }}</span>
+    </app-progress>
+  }
+
+  <section class="grid gap-3">
+    <h2 class="text-sm font-medium">Activity</h2>
+    <app-job-trace [job]="j" [elapsedMs]="elapsedMs()" />
+  </section>
+
+  @if (j.status === 'Pending' && !job.isLoading()) {
+    <div class="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm">
+      <app-icon name="triangle-alert" class="text-muted-foreground" />
+      <p class="flex-1 text-muted-foreground">
+        Still pending after a long wait. The service may be busy or the job may be stuck.
+      </p>
+      <button appButton type="button" variant="outline" size="sm" (click)="job.reload()">
+        <app-icon name="refresh" data-icon="inline-start" />
+        Check again
+      </button>
+    </div>
+  }
+
+  <app-dialog [(open)]="previewOpen" labelledBy="preview-title" class="sm:max-w-5xl">
+    <div appDialogHeader>
+      <h2 appDialogTitle id="preview-title">Preview</h2>
+      <p appDialogDescription>{{ j.templateKey }} · <span class="font-mono text-xs">{{ j.jobId }}</span></p>
+    </div>
+
+    @if (previewSrc(); as src) {
+      <iframe [src]="src" title="Preview of the generated PDF" class="h-[75vh] w-full rounded-lg border bg-muted"></iframe>
+    } @else if (preview.error()) {
+      <div role="alert" class="flex h-[75vh] flex-col items-center justify-center gap-2 rounded-lg border text-destructive">
+        <app-icon name="triangle-alert" class="size-5" />
+        <p>Could not load the PDF. Download it instead, or try again.</p>
+      </div>
+    } @else {
+      <div class="flex h-[75vh] items-center justify-center gap-2 rounded-lg border bg-muted text-muted-foreground">
+        <app-spinner />
+        Loading preview…
+      </div>
+    }
+  </app-dialog>
+} @else if (problem(); as p) {
+  <div role="alert" class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center">
+    <div class="flex size-10 items-center justify-center rounded-lg bg-muted">
+      <app-icon name="triangle-alert" class="size-5 text-muted-foreground" />
+    </div>
+    @if (p.status === 404) {
+      <div class="grid max-w-md gap-1">
+        <h1 class="font-medium">Job not found</h1>
+        <p class="text-sm text-muted-foreground">
+          The service keeps job status for {{ retentionHours }} hours and in memory only, so this job has
+          either expired or the service restarted since it was submitted.
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <a appButton routerLink="/jobs/new">
+          <app-icon name="plus" data-icon="inline-start" />
+          New PDF
+        </a>
+        <button appButton type="button" variant="outline" (click)="forget()">Remove from history</button>
+      </div>
+    } @else {
+      <div class="grid max-w-md gap-1">
+        <h1 class="font-medium">Could not load the job</h1>
+        <p class="text-sm text-muted-foreground">{{ p.detail ?? p.title }}</p>
+      </div>
+      <button appButton type="button" (click)="job.reload()">
+        <app-icon name="refresh" data-icon="inline-start" />
+        Try again
+      </button>
+    }
+  </div>
+} @else {
+  <div class="grid gap-6" aria-busy="true" aria-label="Loading job">
+    <div class="grid gap-2">
+      <div appSkeleton class="h-7 w-48"></div>
+      <div appSkeleton class="h-4 w-80 max-w-full"></div>
+    </div>
+    <div class="grid gap-3">
+      <div appSkeleton class="h-4 w-20"></div>
+      <div appSkeleton class="h-4 w-64"></div>
+      <div appSkeleton class="h-4 w-56"></div>
+      <div appSkeleton class="h-4 w-40"></div>
+    </div>
+  </div>
+}

@@ -1,4 +1,5 @@
 # Local stack:  docker compose up --build
+# Web app:      http://localhost:4200
 # API:          http://localhost:8080/scalar/v1
 # RabbitMQ UI:  http://localhost:15672  (guest / guest)
 
@@ -31,6 +32,17 @@ services:
       - pdf-data:/data
       # Edit a template on the host and the next render picks it up, no rebuild needed.
       - ./templates:/app/Templates:ro
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "4200:8080"
+    depends_on:
+      - api
+    environment:
+      API_UPSTREAM: http://api:8080
 
 volumes:
   pdf-data:

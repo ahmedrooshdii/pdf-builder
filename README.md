@@ -5,7 +5,7 @@ it. Work is queued rather than done on the request thread, because rendering cos
 browser's worth of memory.
 
 ```
-POST /api/pdf/jobs   { "templateId": "invoice", "data": { … } }
+POST /api/pdf/jobs   { "templateKey": "invoice", "data": { … } }
   -> 202 Accepted    { "jobId": "0865…-08df249c54be", "statusUrl": "/api/pdf/jobs/…" }
 
 GET  /api/pdf/jobs/{jobId}
@@ -21,6 +21,10 @@ GET  /files/{fileId}
 
 Services that speak the message bus skip the polling: publish `IGeneratePdfRequest` and receive
 `IGeneratePdfResponse`. See [docs/message-contracts.md](docs/message-contracts.md).
+
+Templates are either built in (`templates/` in this repository) or written in the web app, where
+they start as drafts and are only used by jobs once published. See
+[docs/templates.md](docs/templates.md#two-kinds-of-template).
 
 ## Running it
 
@@ -76,6 +80,8 @@ reuses the browser and takes a few hundred milliseconds.
 
 Other ways in:
 
+- **The web app** in [`web/`](web/README.md) — `cd web && npm install && npm start`, then open
+  http://localhost:4200. Submit, watch the job, preview and download the PDF.
 - **`samples/requests.http`** — open in VS Code with the REST Client extension and click *Send
   Request*. Covers the happy path, the optional-field cases and every failure mode.
 - **Scalar** at `/scalar/v1` — a request builder against the live API, in non-production only.
@@ -102,6 +108,7 @@ outside the allow-list are actually blocked — so CI should run the second form
 | `src/PdfBuilder.Application` | The use case, and the ports it needs (`Abstractions/`). |
 | `src/PdfBuilder.Infrastructure` | One adapter folder per port: `Templates/`, `Rendering/`, `Storage/`, `Jobs/`. |
 | `src/PdfBuilder.Api` | Composition root: HTTP endpoints, the RabbitMQ consumer, `Program.cs`. |
+| `web/` | Angular front end. Its own npm workspace; see [web/README.md](web/README.md). |
 | `templates/` | Template content, kept out of the code projects. Mounted as a volume under Docker. |
 | `samples/` | Payloads, a `.http` file and a PowerShell helper for trying the service by hand. |
 | `tests/` | One project per layer that has logic worth pinning down. |
@@ -118,6 +125,23 @@ Dependencies point inwards only: `Api -> Infrastructure -> Application -> Domain
 - [Configuration](docs/configuration.md) — every setting, and the hosted-broker walkthrough.
 - [Operations](docs/operations.md) — deployment, health checks, sizing, failure modes, known gaps.
 - [Samples](samples/README.md) — the payloads and how to run them.
+- [Web app](web/README.md) — the Angular front end: running it, its folder layering, adding a feature.
+- [Deploying](deploy/README.md) — the Oracle Cloud Always Free setup CI deploys to.
+
+## CI/CD
+
+`.github/workflows/ci.yml` runs on every push and pull request: restore, build (warnings are
+errors, so this is the lint gate too), then the full test suite with Chromium installed. A
+parallel job lints, tests and builds `web/`.
+
+On `master` it goes further — builds an **arm64** image on a native ARM runner, pushes it to
+`ghcr.io/ahmedrooshdii/pdf-builder`, then deploys to the VM over SSH and polls `/health/ready`
+until it answers, so a deploy that comes back broken fails the run instead of going green.
+
+arm64 because Oracle's Always Free tier is Ampere. Building it natively rather than under QEMU
+turns the Chromium and apt layers from the better part of an hour into minutes.
+
+[deploy/README.md](deploy/README.md) has the one-time VM setup and the four repository secrets.
 
 ## Build conventions
 

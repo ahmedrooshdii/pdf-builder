@@ -1,0 +1,91 @@
+@let j = job();
+
+<div appTrace>
+  <span appTraceLine>
+    <span appTraceIcon><app-icon name="clock" /></span>
+    <span appTraceTitle>Queued on the message bus</span>
+    <span appTraceDescription>{{ j.enqueuedAt | date: 'HH:mm:ss' }}</span>
+  </span>
+
+  @switch (j.status) {
+    @case ('Pending') {
+      <span appTraceLine status="running">
+        <span appTraceIcon><app-icon name="loader" class="animate-spin" /></span>
+        <span appTraceTitle>Rendering {{ j.templateKey }} with Chromium</span>
+        <span appTraceDescription>{{ elapsedMs() | duration }}</span>
+      </span>
+      <span appTraceLine status="pending">
+        <span appTraceIcon><app-icon name="hard-drive" /></span>
+        <span appTraceTitle>Store the PDF</span>
+      </span>
+    }
+
+    @case ('Succeeded') {
+      <span appTraceLine>
+        <span appTraceIcon><app-icon name="file-text" /></span>
+        <span appTraceTitle>Rendered {{ j.templateKey }}</span>
+        <span appTraceDescription>{{ j.enqueuedAt | duration: j.completedAt }}</span>
+      </span>
+      <span appTraceLine>
+        <span appTraceIcon><app-icon name="hard-drive" /></span>
+        <span appTraceTitle>Stored as <span class="font-mono">{{ j.fileId }}</span></span>
+        <span appTraceDescription>{{ j.sizeBytes | fileSize }}</span>
+      </span>
+    }
+
+    @case ('Failed') {
+      <details appTraceCollapsible open>
+        <summary appTraceCollapsibleTrigger>
+          <span appTraceLine status="error">
+            <span appTraceIcon><app-icon name="circle-x" /></span>
+            <span appTraceTitle>Failed{{ j.errorCode ? ': ' + j.errorCode : '' }}</span>
+            <span appTraceDescription>{{ j.enqueuedAt | duration: j.completedAt }}</span>
+          </span>
+          <span appTraceIcon class="transition-transform group-open/trace:rotate-90">
+            <app-icon name="chevron-right" />
+          </span>
+        </summary>
+        <div appTraceCollapsibleContent class="grid gap-2">
+          @if (errorHint(); as hint) {
+            <p class="text-sm text-foreground">{{ hint }}</p>
+          }
+          @if (j.errorMessage) {
+            <div appCodeBlock variant="destructive" size="sm">
+              <div appCodeBlockHeader>
+                <div appCodeBlockTitle><app-icon name="triangle-alert" />Error</div>
+                <div appCodeBlockActions>
+                  <app-code-block-copy-button [value]="j.errorMessage" label="Copy error" />
+                </div>
+              </div>
+              <app-code-block-content [code]="j.errorMessage" [wrap]="true" />
+            </div>
+          }
+        </div>
+      </details>
+    }
+  }
+
+  <details appTraceCollapsible>
+    <summary appTraceCollapsibleTrigger>
+      <span appTraceLine>
+        <span appTraceIcon><app-icon name="braces" /></span>
+        <span appTraceTitle>Status response</span>
+        <span appTraceDescription>GET /api/pdf/jobs/…</span>
+      </span>
+      <span appTraceIcon class="transition-transform group-open/trace:rotate-90">
+        <app-icon name="chevron-right" />
+      </span>
+    </summary>
+    <div appTraceCollapsibleContent>
+      <div appCodeBlock size="sm">
+        <div appCodeBlockHeader>
+          <div appCodeBlockTitle><app-icon name="braces" />response.json</div>
+          <div appCodeBlockActions>
+            <app-code-block-copy-button [value]="rawResponse()" label="Copy response" />
+          </div>
+        </div>
+        <app-code-block-content [code]="rawResponse()" language="json" [lineNumbers]="true" class="max-h-72" />
+      </div>
+    </div>
+  </details>
+</div>

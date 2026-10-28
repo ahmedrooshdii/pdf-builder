@@ -27,7 +27,7 @@
     normally replaced by a mounted volume (see TemplateStore:RootPath).
   -->
   <ItemGroup>
-    <Content Include="..\..\templates\*.html;..\..\templates\*.options.json"
+    <Content Include="..\..\templates\*.html;..\..\templates\*.options.json;..\..\templates\*.sample.json"
              Link="Templates\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />

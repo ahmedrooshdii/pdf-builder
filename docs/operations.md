@@ -68,7 +68,7 @@ termination grace period, or rolling deployments will cut jobs off mid-render.
 | `_error` queue filling up | Transient failures exhausting retries | Consumer logs for the `CorrelationId` |
 | Service will not start, `License must be specified` | MassTransit bumped back to 9.x | Pin 8.5.x, or set `MT_LICENSE` |
 
-Every log line a job produces carries `CorrelationId` and `TemplateId` in scope, so a structured
+Every log line a job produces carries `CorrelationId` and `TemplateKey` in scope, so a structured
 sink can show one job's whole history together.
 
 ## Scaling past one instance
