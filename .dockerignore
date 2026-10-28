@@ -1,0 +1,13 @@
+# Both images build with the repository root as context. Keep it small: web/node_modules alone is
+# hundreds of megabytes, and local build output must never leak into an image.
+**/bin/
+**/obj/
+.git/
+.vs/
+.vscode/
+data/
+
+web/node_modules/
+web/dist/
+web/.angular/
+web/public/samples/

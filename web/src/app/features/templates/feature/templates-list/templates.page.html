@@ -1,0 +1,132 @@
+<header class="flex flex-wrap items-end justify-between gap-4">
+  <div class="grid gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight">Templates</h1>
+    <p class="max-w-2xl text-sm text-muted-foreground">
+      Write HTML and CSS, try them on sample data, and publish when they are ready. Jobs only ever render a
+      template's published version, so editing a live template never breaks the documents being generated.
+    </p>
+  </div>
+  <button appButton type="button" (click)="openCreate()">
+    <app-icon name="plus" data-icon="inline-start" />
+    New template
+  </button>
+</header>
+
+@if (templates.hasValue()) {
+  @let rows = templates.value();
+  @if (rows.length > 0) {
+    <div class="overflow-hidden rounded-lg border">
+      <div appScrollArea orientation="horizontal" aria-label="Templates table">
+        <table appTable>
+          <thead appTableHeader>
+            <tr appTableRow class="hover:bg-transparent">
+              <th appTableHead class="pl-4">Key</th>
+              <th appTableHead>Status</th>
+              <th appTableHead>Updated</th>
+              <th appTableHead>Published</th>
+              <th appTableHead class="w-0"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody appTableBody>
+            @for (template of rows; track template.templateKey) {
+              <tr appTableRow>
+                <td appTableCell class="pl-4">
+                  <a
+                    class="flex items-center gap-2 font-medium underline-offset-4 outline-none hover:underline focus-visible:underline"
+                    [routerLink]="['/templates', template.templateKey]"
+                  >
+                    <app-icon name="layout-template" class="text-muted-foreground" />
+                    {{ template.templateKey }}
+                  </a>
+                </td>
+                <td appTableCell>
+                  <app-template-status-badge [status]="template.status" [source]="template.source" />
+                </td>
+                <td appTableCell class="text-muted-foreground">
+                  <time [attr.datetime]="template.updatedAt">{{ template.updatedAt | date: 'MMM d, y, HH:mm' }}</time>
+                </td>
+                <td appTableCell class="text-muted-foreground">
+                  @if (template.publishedAt) {
+                    <time [attr.datetime]="template.publishedAt">{{ template.publishedAt | date: 'MMM d, y, HH:mm' }}</time>
+                  } @else {
+                    —
+                  }
+                </td>
+                <td appTableCell class="pr-3">
+                  <div class="flex justify-end gap-0.5">
+                    @if (isUsable(template)) {
+                      <a
+                        appButton
+                        variant="ghost"
+                        size="icon-sm"
+                        [routerLink]="['/jobs/new']"
+                        [queryParams]="{ template: template.templateKey }"
+                        [attr.aria-label]="'Generate a PDF with ' + template.templateKey"
+                      >
+                        <app-icon name="file-text" />
+                      </a>
+                    }
+                    <a
+                      appButton
+                      variant="ghost"
+                      size="icon-sm"
+                      [routerLink]="['/templates', template.templateKey]"
+                      [attr.aria-label]="(template.source === 'BuiltIn' ? 'View ' : 'Edit ') + template.templateKey"
+                    >
+                      <app-icon [name]="template.source === 'BuiltIn' ? 'eye' : 'code'" />
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  } @else {
+    <div class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center">
+      <div class="flex size-10 items-center justify-center rounded-lg bg-muted">
+        <app-icon name="layout-template" class="size-5 text-muted-foreground" />
+      </div>
+      <div class="grid gap-1">
+        <h2 class="font-medium">No templates yet</h2>
+        <p class="text-sm text-muted-foreground">Start one from a small working example.</p>
+      </div>
+      <button appButton type="button" variant="outline" (click)="openCreate()">
+        <app-icon name="plus" data-icon="inline-start" />
+        New template
+      </button>
+    </div>
+  }
+} @else if (templates.error()) {
+  <div role="alert" class="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+    <app-icon name="triangle-alert" />
+    <p class="flex-1">The templates could not be loaded.</p>
+    <button appButton type="button" variant="outline" size="sm" (click)="templates.reload()">
+      <app-icon name="refresh" data-icon="inline-start" />
+      Try again
+    </button>
+  </div>
+} @else {
+  <div class="grid gap-3 rounded-lg border p-4" aria-busy="true" aria-label="Loading templates">
+    @for (row of [1, 2, 3]; track row) {
+      <div class="flex items-center gap-4">
+        <div appSkeleton class="h-4 w-40"></div>
+        <div appSkeleton class="h-5 w-20 rounded-full"></div>
+        <div appSkeleton class="ml-auto h-4 w-28"></div>
+      </div>
+    }
+  </div>
+}
+
+@if (creating()) {
+  <app-template-key-dialog
+    [(open)]="creating"
+    title="New template"
+    description="It starts as a draft, from a small example you can edit. Jobs cannot use it until you publish it."
+    submitLabel="Create draft"
+    [busy]="busy()"
+    [serverError]="createError()"
+    (submitted)="create($event)"
+  />
+}

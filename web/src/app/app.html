@@ -1,0 +1,32 @@
+<header class="sticky top-0 z-40 w-full border-b bg-background">
+  <div class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
+    <a routerLink="/" class="flex items-center gap-2 font-semibold tracking-tight">
+      <app-logo class="size-7" />
+      PDF Builder
+    </a>
+
+    <nav class="flex items-center gap-1" aria-label="Main">
+      @for (link of links; track link.path) {
+        <a
+          appButton
+          variant="ghost"
+          size="sm"
+          [routerLink]="link.path"
+          routerLinkActive="bg-muted text-foreground"
+          [routerLinkActiveOptions]="{ exact: link.exact }"
+          ariaCurrentWhenActive="page"
+          class="text-muted-foreground"
+        >
+          <app-icon [name]="link.icon" data-icon="inline-start" />
+          {{ link.label }}
+        </a>
+      }
+    </nav>
+
+    <app-theme-toggle class="ml-auto" />
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+  <router-outlet />
+</main>

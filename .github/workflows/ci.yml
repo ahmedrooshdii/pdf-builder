@@ -64,6 +64,38 @@ jobs:
           PDFBUILDER_RUN_BROWSER_TESTS: "1"
         run: dotnet test PdfBuilder.slnx --configuration Release --no-build
 
+  web:
+    name: Web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      # The lint config also enforces the folder layering (features never import each other, ui
+      # components never reach services), so this step is the architecture check as well.
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --watch=false
+
+      - name: Build
+        run: npm run build
+
   image:
     name: Container image (arm64)
     # Oracle's Always Free tier is Ampere, so the image has to be arm64. Building it on a native
@@ -186,3 +218,4 @@ jobs:
           cd /opt/pdf-builder && docker compose logs --tail 60 api >&2
           exit 1
           REMOTE
+
