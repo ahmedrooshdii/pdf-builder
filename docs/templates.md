@@ -48,11 +48,49 @@ Put a sibling `{templateKey}.options.json` next to the template. Every field is 
 
 | Field | Default | Notes |
 | --- | --- | --- |
-| `format` | `A4` | Any name the browser knows: `A4`, `A3`, `Letter`, `Legal`, `Tabloid`. |
+| `format` | `A4` | `A0`–`A6`, `Letter`, `Legal`, `Tabloid` or `Ledger`, any case. |
+| `width`, `height` | none | A custom page size, for paper no format names: a till receipt, a label, a ticket. Set both or neither; when set, `format` is ignored. `height` may be `auto`: see [Receipts](#receipts-height-auto). |
 | `landscape` | `false` | |
 | `printBackground` | `true` | When false, background colours and images are dropped. |
-| `preferCssPageSize` | `true` | A CSS `@page { size: … }` rule wins over `format`. |
-| `margins` | `10mm` each | CSS lengths: `mm`, `cm`, `in`, `px`. |
+| `preferCssPageSize` | `true` | A CSS `@page { size: … }` rule wins over `format` and `width`/`height`. |
+| `margins` | `10mm` each | |
+
+Every length (`width`, `height`, each margin) is a number with a unit: `mm`, `cm`, `in` or `px`,
+such as `80mm` or `0.5in`. Anything else is refused when the template is saved.
+
+### Receipts: `"height": "auto"`
+
+A till receipt has a known width and no fixed length: the roll is cut where the receipt ends. Set
+`height` to `auto` and the PDF is one page exactly as tall as the content, however many items
+there are:
+
+```json
+{
+  "width": "80mm",
+  "height": "auto",
+  "margins": { "top": "4mm", "right": "4mm", "bottom": "4mm", "left": "4mm" }
+}
+```
+
+How it works: the document is laid out at the printable width (`width` minus the left and right
+margins), measured, and printed on a page that tall plus the top and bottom margins. Some things
+follow from that:
+
+- Put the margins in `margins`, not in an `@page` rule: they are what the measurement adds back.
+- `landscape` and `preferCssPageSize` are ignored, and an `@page { size: … }` in the template is
+  overridden. A roll has one orientation and its size is the measured one.
+- A page is capped at 5 m. Anything longer continues onto a second page.
+- `width` cannot be `auto`.
+
+In the web app, the **Page** tab of the template editor edits all of this.
+
+### Per-request page setup
+
+A caller can change any of it for one document, without touching the template: `pageSetup` on
+`POST /api/pdf/jobs`, or `PageSetup` on the bus message (see
+[message-contracts.md](message-contracts.md#pagesetup)). Only the fields it sets change. A request
+that sets a size (`format`, or `width` with `height`) also turns `preferCssPageSize` off unless it
+sets that too, because a size someone asked for should not lose silently to the template's `@page` rule.
 
 With `preferCssPageSize` left on, the usual pattern is to set margins to `0mm` in the sidecar and
 control everything from `@page` in the template, so page setup lives in one place:

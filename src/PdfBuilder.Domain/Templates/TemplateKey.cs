@@ -1,11 +1,12 @@
 using System.Text.RegularExpressions;
+using PdfBuilder.Contracts;
 
 namespace PdfBuilder.Domain.Templates;
 
 /// <summary>The rules for a template key, kept in one place because three layers enforce them.</summary>
 public static partial class TemplateKey
 {
-    public const int MaxLength = 64;
+    public const int MaxLength = PdfRequestLimits.TemplateKeyMaxLength;
 
     /// <summary>
     /// A key becomes a file name in both template stores, so the character set doubles as a
@@ -15,6 +16,7 @@ public static partial class TemplateKey
 
     public static bool IsValid(string? key) => key is not null && Pattern().IsMatch(key);
 
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")]
+    // The published pattern, so a caller pre-validating with the contracts package agrees with us.
+    [GeneratedRegex(PdfRequestLimits.TemplateKeyPattern)]
     private static partial Regex Pattern();
 }

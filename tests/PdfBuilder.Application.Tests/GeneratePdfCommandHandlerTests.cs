@@ -55,6 +55,25 @@ public sealed class GeneratePdfCommandHandlerTests
     }
 
     [Fact]
+    public async Task Applies_the_requests_page_setup_on_top_of_the_templates()
+    {
+        var template = new PdfTemplate("invoice", "<p>x</p>", PdfRenderOptions.Default with { Landscape = true });
+        _templates.GetByKeyAsync("invoice", Arg.Any<CancellationToken>()).Returns(template);
+        _engine.RenderAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("<p>x</p>");
+        _renderer.RenderAsync(Arg.Any<string>(), Arg.Any<PdfRenderOptions>(), Arg.Any<CancellationToken>()).Returns(PdfBytes);
+        _storage.SaveAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new StoredFile("id", "url", 4));
+
+        var setup = new PageSetup { Width = "80mm", Height = "200mm" };
+        await CreateHandler().Handle(new GeneratePdfCommand("invoice", "{}", setup), Ct);
+
+        await _renderer.Received(1).RenderAsync(
+            Arg.Any<string>(),
+            Arg.Is<PdfRenderOptions>(o => o.Width == "80mm" && o.Height == "200mm" && o.Landscape && !o.PreferCssPageSize),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Fails_permanently_when_the_template_is_unknown()
     {
         _templates.GetByKeyAsync("missing", Arg.Any<CancellationToken>()).Returns((PdfTemplate?)null);

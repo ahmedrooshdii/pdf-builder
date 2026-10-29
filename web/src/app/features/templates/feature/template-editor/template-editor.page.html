@@ -150,7 +150,7 @@
             </span>
           }
           <app-code-block-copy-button
-            [value]="tab() === 'html' ? html() : tab() === 'css' ? css() : sampleJson()"
+            [value]="copyValue()"
             [label]="'Copy ' + activeTab().file"
           />
         </div>
@@ -189,6 +189,15 @@
         [class.hidden]="tab() !== 'sample'"
         [(value)]="sampleJson"
       />
+      <div
+        id="panel-page"
+        role="tabpanel"
+        aria-label="Page setup"
+        class="min-h-0 flex-1 overflow-y-auto border-t p-4 scrollbar-thin"
+        [class.hidden]="tab() !== 'page'"
+      >
+        <app-page-setup-form class="block max-w-xl" [readonly]="isBuiltIn()" [(value)]="options" />
+      </div>
 
       <div appCodeBlockFooter class="text-xs">
         <span class="font-mono">{{ activeTab().file }}</span>
@@ -249,7 +258,7 @@
 
   <!-- Rendered both in the page header and in the full-screen toolbar. -->
   <ng-template #draftActions>
-    <button appButton type="button" variant="outline" [disabled]="!dirty() || busy() !== null" (click)="save()">
+    <button appButton type="button" variant="outline" [disabled]="!canSave() || busy() !== null" (click)="save()">
       @if (busy() === 'save') {
         <app-spinner data-icon="inline-start" />
       } @else {

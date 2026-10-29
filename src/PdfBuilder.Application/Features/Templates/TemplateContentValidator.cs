@@ -31,8 +31,7 @@ public sealed class TemplateContentValidator : AbstractValidator<TemplateContent
             .Must(BeEmptyOrAJsonObject)
             .WithMessage("Sample data must be a JSON object, or empty.");
 
-        RuleFor(x => x.Options).NotNull();
-        RuleFor(x => x.Options.Format).NotEmpty().When(x => x.Options is not null);
+        RuleFor(x => x.Options).NotNull().SetValidator(new PdfRenderOptionsValidator());
     }
 
     private static bool BeEmptyOrAJsonObject(string json)

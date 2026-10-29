@@ -17,4 +17,9 @@
     <PackageReference Include="Scriban" />
   </ItemGroup>
 
+  <!-- So the mapping to Playwright's options can be tested without launching a browser. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PdfBuilder.Infrastructure.Tests" />
+  </ItemGroup>
+
 </Project>

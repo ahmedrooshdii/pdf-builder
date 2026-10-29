@@ -1,3 +1,5 @@
+import { PageMargins, PageOptions, hasCustomSize } from '../../../shared/data-access/template.models';
+
 /** Mirrors `PdfBuilder.Domain.Jobs.PdfJobStatus`, which the API serialises by name. */
 export type PdfJobStatus = 'Pending' | 'Succeeded' | 'Failed';
 
@@ -15,10 +17,50 @@ export interface PdfJob {
   readonly errorMessage: string | null;
 }
 
+/**
+ * Mirrors `PdfBuilder.Contracts.PdfPageSetup`: changes to the template's page setup for one job.
+ * Anything left out keeps the template's value.
+ */
+export interface PageSetup {
+  readonly format?: string;
+  readonly width?: string;
+  readonly height?: string;
+  readonly landscape?: boolean;
+  readonly printBackground?: boolean;
+  readonly preferCssPageSize?: boolean;
+  readonly margins?: Partial<PageMargins>;
+}
+
 /** Body of `POST /api/pdf/jobs`. */
 export interface GeneratePdfRequest {
   readonly templateKey: string;
   readonly data: Readonly<Record<string, unknown>>;
+  readonly pageSetup?: PageSetup;
+}
+
+/** Only what `edited` changes from `template`, so the request says exactly what differs. Undefined when nothing does. */
+export function pageSetupBetween(template: PageOptions, edited: PageOptions): PageSetup | undefined {
+  const setup: { -readonly [K in keyof PageSetup]: PageSetup[K] } = {};
+
+  if (edited.width && edited.height) {
+    if (edited.width !== template.width || edited.height !== template.height) {
+      setup.width = edited.width;
+      setup.height = edited.height;
+    }
+  } else if (edited.format !== template.format || hasCustomSize(template)) {
+    setup.format = edited.format;
+  }
+  if (edited.landscape !== template.landscape) setup.landscape = edited.landscape;
+  if (edited.printBackground !== template.printBackground) setup.printBackground = edited.printBackground;
+  if (edited.preferCssPageSize !== template.preferCssPageSize) setup.preferCssPageSize = edited.preferCssPageSize;
+
+  const margins: Partial<Record<keyof PageMargins, string>> = {};
+  for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+    if (edited.margins[side] !== template.margins[side]) margins[side] = edited.margins[side];
+  }
+  if (Object.keys(margins).length > 0) setup.margins = margins;
+
+  return Object.keys(setup).length > 0 ? setup : undefined;
 }
 
 /** 202 response of `POST /api/pdf/jobs`. */

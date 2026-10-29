@@ -13,9 +13,9 @@ import {
   validate,
 } from '@angular/forms/signals';
 import { Router, RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, map } from 'rxjs';
 import { ProblemDetails, toProblemDetails } from '../../../../core/http/problem-details';
-import { TEMPLATE_KEY_PATTERN, isUsable } from '../../../../shared/data-access/template.models';
+import { PageOptions, TEMPLATE_KEY_PATTERN, isUsable } from '../../../../shared/data-access/template.models';
 import { TemplatesApi } from '../../../../shared/data-access/templates.api';
 import { FileSizePipe } from '../../../../shared/pipes/file-size.pipe';
 import { Button } from '../../../../shared/ui/button';
@@ -26,9 +26,11 @@ import { FieldErrors } from '../../../../shared/ui/field-errors';
 import { Label } from '../../../../shared/ui/form-controls';
 import { Select, SelectOption } from '../../../../shared/ui/select';
 import { Icon } from '../../../../shared/ui/icon';
+import { PageSetupForm, validPageOptions } from '../../../../shared/ui/page-setup-form';
+import { Switch } from '../../../../shared/ui/switch';
 import { JobHistoryStore } from '../../data-access/job-history.store';
 import { parsePayload } from '../../data-access/parse-payload';
-import { pendingJob } from '../../data-access/pdf-job.models';
+import { PageSetup, pageSetupBetween, pendingJob } from '../../data-access/pdf-job.models';
 import { PdfJobsApi } from '../../data-access/pdf-jobs.api';
 
 interface JobDraft {
@@ -49,7 +51,9 @@ interface JobDraft {
     FieldErrors,
     Icon,
     Label,
+    PageSetupForm,
     Select,
+    Switch,
     RouterLink,
     Spinner,
   ],
@@ -87,6 +91,22 @@ export class NewJobPage {
     templateKey: this.template() ?? 'invoice',
     data: '{\n  \n}',
   }));
+
+  // ---- Page setup -----------------------------------------------------------------------------
+
+  /** Off: the job prints exactly as the template says. On: the form below says what changes. */
+  protected readonly customPage = signal(false);
+
+  /** The page setup jobs get from the chosen template: its published one, which is what renders. */
+  protected readonly templatePage = rxResource({
+    params: () => (this.customPage() ? this.draft().templateKey.trim() : undefined),
+    stream: ({ params: key }) => this.templatesApi.get(key).pipe(map((t) => (t.published ?? t.draft).options)),
+  });
+
+  /** Starts from the template's setup each time the template changes, then holds the edits. */
+  protected readonly pageOptions = linkedSignal<PageOptions | undefined>(() =>
+    this.templatePage.hasValue() ? this.templatePage.value() : undefined,
+  );
 
   /** Failures that belong to no single field: the API is down, a 500, an unexpected problem. */
   protected readonly formError = signal<string | null>(null);
@@ -142,6 +162,14 @@ export class NewJobPage {
     }
   }
 
+  /** What to send as `pageSetup`: undefined for none, null when the form holds a length the server would refuse. */
+  private pageSetup(): PageSetup | undefined | null {
+    const edited = this.pageOptions();
+    const template = this.templatePage.hasValue() ? this.templatePage.value() : undefined;
+    if (!this.customPage() || !edited || !template) return undefined;
+    return validPageOptions(edited) ? pageSetupBetween(template, edited) : null;
+  }
+
   private async enqueue(field: FieldTree<JobDraft>): Promise<TreeValidationResult> {
     this.formError.set(null);
 
@@ -151,8 +179,14 @@ export class NewJobPage {
       return { kind: 'payload', message: payload.error, fieldTree: field.data };
     }
 
+    const pageSetup = this.pageSetup();
+    if (pageSetup === null) {
+      this.formError.set('Fix the page setup first: every size and margin needs a unit, for example 80mm.');
+      return null;
+    }
+
     try {
-      const accepted = await firstValueFrom(this.api.enqueue({ templateKey, data: payload.value }));
+      const accepted = await firstValueFrom(this.api.enqueue({ templateKey, data: payload.value, pageSetup }));
       this.history.record(pendingJob(accepted, templateKey, new Date()));
       await this.router.navigate(['/jobs', accepted.jobId]);
       return null;

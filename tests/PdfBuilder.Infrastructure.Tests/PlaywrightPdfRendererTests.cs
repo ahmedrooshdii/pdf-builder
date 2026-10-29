@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -58,6 +60,93 @@ public sealed class PlaywrightPdfRendererTests
         var pdf = await renderer.RenderAsync(html, PdfRenderOptions.Default, Ct);
 
         Assert.Equal("%PDF-", Encoding.ASCII.GetString(pdf, 0, 5));
+    }
+
+    [Fact]
+    public async Task Prints_on_a_custom_page_size()
+    {
+        RequireBrowser();
+        await using var renderer = CreateRenderer();
+
+        var pdf = await renderer.RenderAsync(
+            "<p>receipt</p>",
+            PdfRenderOptions.Default with { Width = "80mm", Height = "100mm", PreferCssPageSize = false },
+            Ct);
+
+        // 80mm x 100mm is 226.77 x 283.46 points. Chromium rounds to whole device pixels on the
+        // way, so it writes 227.04 x 283.92 into the MediaBox: close, not exact.
+        var box = Regex.Match(Encoding.Latin1.GetString(pdf), @"/MediaBox \[0 0 (?<w>[\d.]+) (?<h>[\d.]+)\]");
+        Assert.True(box.Success, "The PDF has no MediaBox.");
+        Assert.Equal(226.77, double.Parse(box.Groups["w"].Value, CultureInfo.InvariantCulture), tolerance: 1);
+        Assert.Equal(283.46, double.Parse(box.Groups["h"].Value, CultureInfo.InvariantCulture), tolerance: 1);
+    }
+
+    private static readonly PdfRenderOptions Receipt = PdfRenderOptions.Default with
+    {
+        Width = "80mm",
+        Height = PageSize.Auto,
+        Margins = new PageMargins("4mm", "4mm", "4mm", "4mm")
+    };
+
+    [Fact]
+    public async Task Fits_a_long_receipt_on_one_page_when_the_height_is_auto()
+    {
+        RequireBrowser();
+        await using var renderer = CreateRenderer();
+
+        // Far longer than any named paper: 150 lines would run to several A4 pages.
+        var lines = string.Concat(Enumerable.Range(1, 150).Select(i => $"<p style=\"margin:0\">Item {i} ........ 9.99</p>"));
+        var pdf = await renderer.RenderAsync($"<html><body>{lines}</body></html>", Receipt, Ct);
+
+        var (width, height, pages) = Describe(pdf);
+        Assert.Equal(1, pages);
+        Assert.Equal(226.77, width, tolerance: 1);
+        Assert.True(height > 842, $"Expected a page taller than A4, got {height}pt.");
+    }
+
+    [Fact]
+    public async Task Keeps_a_short_receipt_short_when_the_height_is_auto()
+    {
+        RequireBrowser();
+        await using var renderer = CreateRenderer();
+
+        var pdf = await renderer.RenderAsync("<p>Total 9.99</p>", Receipt, Ct);
+
+        var (_, height, pages) = Describe(pdf);
+        Assert.Equal(1, pages);
+        Assert.True(height < 150, $"Expected a page about as tall as one line plus margins, got {height}pt.");
+    }
+
+    [Fact]
+    public async Task Ignores_the_templates_page_rule_when_the_height_is_auto()
+    {
+        RequireBrowser();
+        await using var renderer = CreateRenderer();
+
+        // Short on purpose: a page wider than it is tall is the one Chromium would turn to match the
+        // template's portrait A4.
+        var pdf = await renderer.RenderAsync(
+            "<html><head><style>@page { size: A4; }</style></head><body><p>x</p></body></html>",
+            Receipt with { PreferCssPageSize = true },
+            Ct);
+
+        var (width, height, pages) = Describe(pdf);
+        Assert.Equal(1, pages);
+        Assert.Equal(226.77, width, tolerance: 1);
+        Assert.True(height < width, $"Expected the short receipt to stay wider than tall, got {width}x{height}pt.");
+    }
+
+    /// <summary>The first page's size in points, and how many pages there are.</summary>
+    private static (double Width, double Height, int Pages) Describe(byte[] pdf)
+    {
+        var text = Encoding.Latin1.GetString(pdf);
+        var box = Regex.Match(text, @"/MediaBox \[0 0 (?<w>[\d.]+) (?<h>[\d.]+)\]");
+        Assert.True(box.Success, "The PDF has no MediaBox.");
+
+        return (
+            double.Parse(box.Groups["w"].Value, CultureInfo.InvariantCulture),
+            double.Parse(box.Groups["h"].Value, CultureInfo.InvariantCulture),
+            Regex.Count(text, @"/Type\s*/Page(?!s)"));
     }
 
     [Fact]

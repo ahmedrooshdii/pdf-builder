@@ -7,6 +7,7 @@ import { debounceTime, firstValueFrom } from 'rxjs';
 import { ProblemDetails, toProblemDetails } from '../../../../core/http/problem-details';
 import { HasUnsavedChanges } from '../../../../core/routing/unsaved-changes.guard';
 import {
+  DEFAULT_PAGE_OPTIONS,
   TemplateContent,
   TemplateDetail,
   TemplateErrorCodes,
@@ -20,11 +21,12 @@ import { CodeEditor } from '../../../../shared/ui/code-editor/code-editor';
 import { DIALOG } from '../../../../shared/ui/dialog';
 import { Skeleton, Spinner } from '../../../../shared/ui/feedback';
 import { Icon, IconName } from '../../../../shared/ui/icon';
+import { PageSetupForm, validPageOptions } from '../../../../shared/ui/page-setup-form';
 import { TABS } from '../../../../shared/ui/tabs';
 import { TemplateKeyDialog } from '../../ui/template-key-dialog';
 import { TemplateStatusBadge } from '../../ui/template-status-badge';
 
-type SourceTab = 'html' | 'css' | 'sample';
+type SourceTab = 'html' | 'css' | 'sample' | 'page';
 
 const TABS_INFO: readonly { id: SourceTab; label: string; icon: IconName; file: string; hint: string }[] = [
   {
@@ -48,6 +50,13 @@ const TABS_INFO: readonly { id: SourceTab; label: string; icon: IconName; file: 
     file: 'sample.json',
     hint: 'Drives the preview, the check that runs before publishing, and "Load sample" on New PDF.',
   },
+  {
+    id: 'page',
+    label: 'Page',
+    icon: 'layout-template',
+    file: 'options.json',
+    hint: 'What jobs print on. A request can still change any of it for one document.',
+  },
 ];
 
 @Component({
@@ -63,6 +72,7 @@ const TABS_INFO: readonly { id: SourceTab; label: string; icon: IconName; file: 
     Icon,
     Skeleton,
     Spinner,
+    PageSetupForm,
     TABS,
     TemplateKeyDialog,
     TemplateStatusBadge,
@@ -109,11 +119,13 @@ export class TemplateEditorPage implements HasUnsavedChanges {
   protected readonly html = linkedSignal(() => this.server()?.draft.html ?? '');
   protected readonly css = linkedSignal(() => this.server()?.draft.css ?? '');
   protected readonly sampleJson = linkedSignal(() => this.server()?.draft.sampleJson ?? '');
+  protected readonly options = linkedSignal(() => this.server()?.draft.options ?? DEFAULT_PAGE_OPTIONS);
+  protected readonly optionsValid = computed(() => validPageOptions(this.options()));
 
   private readonly content = computed<TemplateContent | undefined>(() => {
     const server = this.server();
     return server
-      ? { html: this.html(), css: this.css(), sampleJson: this.sampleJson(), options: server.draft.options }
+      ? { html: this.html(), css: this.css(), sampleJson: this.sampleJson(), options: this.options() }
       : undefined;
   });
 
@@ -123,8 +135,22 @@ export class TemplateEditorPage implements HasUnsavedChanges {
     return !!server && !!content && !sameContent(content, server.draft);
   });
 
+  protected readonly copyValue = computed(() => {
+    switch (this.tab()) {
+      case 'html':
+        return this.html();
+      case 'css':
+        return this.css();
+      case 'sample':
+        return this.sampleJson();
+      case 'page':
+        return JSON.stringify(this.options(), null, 2);
+    }
+  });
+
+  protected readonly canSave = computed(() => this.dirty() && this.optionsValid());
   protected readonly canPublish = computed(
-    () => !this.isBuiltIn() && (this.dirty() || this.server()?.status !== 'Published'),
+    () => !this.isBuiltIn() && this.optionsValid() && (this.dirty() || this.server()?.status !== 'Published'),
   );
   protected readonly usable = computed(() => {
     const server = this.server();
@@ -133,8 +159,19 @@ export class TemplateEditorPage implements HasUnsavedChanges {
 
   // ---- Live preview ---------------------------------------------------------------------------
 
+  /**
+   * The preview is HTML, so the page setup cannot change it: it goes along with the saved options,
+   * and a half-typed margin neither breaks the preview nor re-renders it.
+   */
+  private readonly previewContent = computed<TemplateContent | undefined>(() => {
+    const server = this.server();
+    return server
+      ? { html: this.html(), css: this.css(), sampleJson: this.sampleJson(), options: server.draft.options }
+      : undefined;
+  });
+
   /** Waits for a pause in typing, so the server renders once per thought rather than per key. */
-  private readonly settledContent = toSignal(toObservable(this.content).pipe(debounceTime(350)));
+  private readonly settledContent = toSignal(toObservable(this.previewContent).pipe(debounceTime(350)));
 
   protected readonly preview = rxResource({
     params: () => this.settledContent(),
@@ -177,6 +214,10 @@ export class TemplateEditorPage implements HasUnsavedChanges {
     const content = this.content();
     if (!server || !content || this.isBuiltIn() || this.busy()) return undefined;
     if (!this.dirty()) return server;
+    if (!this.optionsValid()) {
+      this.tab.set('page');
+      return undefined;
+    }
 
     return this.run('save', async () => {
       const saved = await firstValueFrom(this.api.saveDraft(server.templateKey, server.revision, content));
@@ -224,6 +265,7 @@ export class TemplateEditorPage implements HasUnsavedChanges {
       this.html.set(server.draft.html);
       this.css.set(server.draft.css);
       this.sampleJson.set(server.draft.sampleJson);
+      this.options.set(server.draft.options);
       await this.router.navigate(['/templates']);
     });
   }
