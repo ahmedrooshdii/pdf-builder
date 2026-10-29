@@ -62,7 +62,7 @@ termination grace period, or rolling deployments will cut jobs off mid-render.
 | Symptom | Likely cause | Where to look |
 | --- | --- | --- |
 | Every job fails `TEMPLATE_NOT_FOUND` | Template volume not mounted | `/health/ready`; `TemplateStore:RootPath` |
-| Jobs fail `RENDER_FAILED` after retries | Chromium OOM, or a template waiting on a blocked asset | Container memory; `--disable-dev-shm-usage` present; `Playwright:AllowedHosts` |
+| HTTP jobs fail `RENDER_FAILED` after retries (bus callers get a `Fault<T>`) | Chromium OOM, or a template waiting on a blocked asset | Container memory; `--disable-dev-shm-usage` present; `Playwright:AllowedHosts` |
 | `FileUrl` 404s for the caller | `Storage:PublicBaseUrl` wrong, or more than one replica on local disk | [Scaling past one instance](#scaling-past-one-instance) |
 | Boxes instead of glyphs | Font family not in the image | Add the font package to the Dockerfile |
 | `_error` queue filling up | Transient failures exhausting retries | Consumer logs for the `CorrelationId` |
