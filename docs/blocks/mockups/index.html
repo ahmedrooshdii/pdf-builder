@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Console mockups</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body>
+  <main class="main stack">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Console mockups · phase 1</h1>
+        <p class="page-sub" style="max-width:720px">
+          Static screens for the features in <span class="mono">docs/blocks/03-planning.md</span>, built from the console's
+          real tokens and shadcn base-nova components. Every state is a link, so each can be captured into Figma.
+        </p>
+      </div>
+      <button class="btn btn-outline has-icon-start" onclick="toggleTheme()"><i data-icon="moon" class="icon"></i>Toggle theme</button>
+    </header>
+
+    <div class="alert">
+      <i data-icon="info" class="icon muted"></i>
+      <div class="alert-title">Into Figma</div>
+      <div class="alert-desc">
+        Open a state below, then run the <b>html.to.design</b> browser extension on the tab (it captures local files).
+        Add <span class="mono">?theme=dark</span> to any link for the dark version. Colours arrive as hex because Figma has no oklch;
+        the values are generated from <span class="mono">web/src/styles.css</span>.
+      </div>
+    </div>
+
+    <section class="stack-sm">
+      <h2 class="semibold">Overview · where the console opens</h2>
+      <div class="index-grid">
+        <a class="index-card" href="overview.html"><span class="medium">Needs attention</span><span class="hint">Failing webhook, failed jobs, expiring key, unpublished change</span></a>
+        <a class="index-card" href="overview.html?state=clear"><span class="medium">All clear</span><span class="hint">Nothing needs the operator</span></a>
+        <a class="index-card" href="overview.html?client=ecommerce"><span class="medium">One client</span><span class="hint">Breadcrumb and switcher show the client</span></a>
+      </div>
+    </section>
+
+    <section class="stack-sm">
+      <h2 class="semibold">Shell · sidebar, shortcuts, logo</h2>
+      <div class="index-grid">
+        <a class="index-card" href="overview.html?dialog=command"><span class="medium">Command menu</span><span class="hint">Ctrl K: search templates, jump, switch client</span></a>
+        <a class="index-card" href="overview.html?dialog=shortcuts"><span class="medium">Keyboard shortcuts</span><span class="hint">? opens it anywhere</span></a>
+        <a class="index-card" href="overview.html?menu=client"><span class="medium">Client switcher</span><span class="hint">In the sidebar, with Ctrl 1–9</span></a>
+        <a class="index-card" href="overview.html?menu=user"><span class="medium">Operator menu</span><span class="hint">Session, theme, shortcuts, sign out</span></a>
+        <a class="index-card" href="jobs.html?sidebar=collapsed"><span class="medium">Sidebar collapsed</span><span class="hint">Ctrl B: icons only, more room for the table</span></a>
+        <a class="index-card" href="logo-options.html"><span class="medium">Logo options</span><span class="hint">Three candidates; pick one and every screen uses it</span></a>
+      </div>
+    </section>
+
+    <section class="stack-sm">
+      <h2 class="semibold">Access · features 002, 004, 012</h2>
+      <div class="index-grid">
+        <a class="index-card" href="sign-in.html"><span class="medium">Sign in</span><span class="hint">Default</span></a>
+        <a class="index-card" href="sign-in.html?state=error"><span class="medium">Sign in · rejected key</span><span class="hint">Generic message, invalid field</span></a>
+        <a class="index-card" href="sign-in.html?state=loading"><span class="medium">Sign in · submitting</span><span class="hint">Button busy</span></a>
+        <a class="index-card" href="sign-in.html?brand=acme"><span class="medium">Sign in · dedicated deployment</span><span class="hint">Company name and logo from configuration</span></a>
+        <a class="index-card" href="jobs.html?brand=acme"><span class="medium">Branded shell</span><span class="hint">Header with a company's branding</span></a>
+      </div>
+    </section>
+
+    <section class="stack-sm">
+      <h2 class="semibold">API keys · features 002, 004</h2>
+      <div class="index-grid">
+        <a class="index-card" href="api-keys.html"><span class="medium">Keys</span><span class="hint">Active, expiring, revoked</span></a>
+        <a class="index-card" href="api-keys.html?dialog=create"><span class="medium">New key</span><span class="hint">Name, scopes, expiry</span></a>
+        <a class="index-card" href="api-keys.html?dialog=reveal"><span class="medium">Key shown once</span><span class="hint">Only exit is “I have copied it”</span></a>
+        <a class="index-card" href="api-keys.html?dialog=revoke"><span class="medium">Revoke</span><span class="hint">Names the key and the client</span></a>
+        <a class="index-card" href="api-keys.html?state=empty"><span class="medium">No keys yet</span><span class="hint">Empty state</span></a>
+        <a class="index-card" href="api-keys.html?client=all"><span class="medium">Pick a client</span><span class="hint">“All clients” selected</span></a>
+        <a class="index-card" href="api-keys.html?client=all&amp;menu=client"><span class="medium">Client switcher open</span><span class="hint">Header menu</span></a>
+      </div>
+    </section>
+
+    <section class="stack-sm">
+      <h2 class="semibold">Clients · features 002, 008</h2>
+      <div class="index-grid">
+        <a class="index-card" href="clients.html"><span class="medium">Clients</span><span class="hint">Active and disabled, custom limits</span></a>
+        <a class="index-card" href="clients.html?state=menu"><span class="medium">Row actions</span><span class="hint">Keys, webhooks, limits, disable</span></a>
+        <a class="index-card" href="clients.html?dialog=add"><span class="medium">Add client</span><span class="hint">With an id validation error</span></a>
+        <a class="index-card" href="clients.html?dialog=limits"><span class="medium">Edit limits</span><span class="hint">Per-client overrides</span></a>
+        <a class="index-card" href="clients.html?dialog=disable"><span class="medium">Disable client</span><span class="hint">Reversible</span></a>
+      </div>
+    </section>
+
+    <section class="stack-sm">
+      <h2 class="semibold">Webhooks · feature 007</h2>
+      <div class="index-grid">
+        <a class="index-card" href="webhooks.html"><span class="medium">Endpoints and deliveries</span><span class="hint">Healthy, failing, retrying, failed</span></a>
+        <a class="index-card" href="webhooks.html?dialog=add"><span class="medium">Add endpoint</span><span class="hint">URL and events</span></a>
+        <a class="index-card" href="webhooks.html?dialog=secret"><span class="medium">Signing secret shown once</span><span class="hint">Same pattern as keys</span></a>
+        <a class="index-card" href="webhooks.html?dialog=delivery"><span class="medium">Delivery detail</span><span class="hint">Payload, attempts, redeliver</span></a>
+      </div>
+    </section>
+
+    <section class="stack-sm">
+      <h2 class="semibold">Jobs · feature 010</h2>
+      <div class="index-grid">
+        <a class="index-card" href="jobs.html"><span class="medium">List and detail</span><span class="hint">Resizable split: job trace and payload beside the list</span></a>
+        <a class="index-card" href="jobs.html?state=list"><span class="medium">List only</span><span class="hint">Detail closed; numbered pagination</span></a>
+        <a class="index-card" href="jobs.html?client=ecommerce"><span class="medium">One client</span><span class="hint">Client column hidden</span></a>
+        <a class="index-card" href="jobs.html?state=loading"><span class="medium">Loading</span><span class="hint">Skeleton rows</span></a>
+        <a class="index-card" href="jobs.html?state=empty"><span class="medium">Empty</span><span class="hint">Nothing in range</span></a>
+        <a class="index-card" href="jobs.html?state=error"><span class="medium">Error</span><span class="hint">Problem details</span></a>
+      </div>
+    </section>
+
+    <section class="stack-sm">
+      <h2 class="semibold">Templates · feature 013</h2>
+      <div class="index-grid">
+        <a class="index-card" href="templates.html"><span class="medium">Select for export</span><span class="hint">Selection bar, built-ins not exportable</span></a>
+        <a class="index-card" href="templates.html?dialog=import"><span class="medium">Import preview</span><span class="hint">Create, or replace only when ticked</span></a>
+        <a class="index-card" href="templates.html?dialog=imported"><span class="medium">Imported</span><span class="hint">Toast</span></a>
+      </div>
+    </section>
+  </main>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>

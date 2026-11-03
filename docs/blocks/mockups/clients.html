@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clients</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body data-active="clients">
+  <!-- States: default · ?state=menu (row actions open) · ?dialog=add · ?dialog=limits · ?dialog=disable -->
+  <div data-shell></div>
+
+  <main class="main stack">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Clients</h1>
+        <p class="page-sub">The systems that call this block. Every key, template and job belongs to one client.</p>
+      </div>
+      <button class="btn has-icon-start"><i data-icon="plus" class="icon"></i>Add client<span data-kbd="N"></span></button>
+    </header>
+
+    <section class="surface" style="overflow:visible">
+      <table class="table">
+        <thead>
+          <tr><th>Client</th><th>Id</th><th>Status</th><th class="right">Active keys</th><th class="right">Jobs (7 days)</th><th>Limits</th><th>Created</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="medium">E-commerce</td>
+            <td><span class="mono">ecommerce</span></td>
+            <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Active</span></td>
+            <td class="right tabular">3</td>
+            <td class="right tabular">1,284</td>
+            <td class="muted">Default</td>
+            <td class="muted">12 Oct 2026</td>
+            <td class="right"><button class="btn btn-ghost btn-icon-sm"><i data-icon="ellipsis" class="icon"></i></button></td>
+          </tr>
+          <tr>
+            <td class="medium">Delivery app</td>
+            <td><span class="mono">delivery</span></td>
+            <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Active</span></td>
+            <td class="right tabular">1</td>
+            <td class="right tabular">312</td>
+            <td>60 / min · 20 pending</td>
+            <td class="muted">28 Oct 2026</td>
+            <td class="right" style="position:relative">
+              <button class="btn btn-ghost btn-icon-sm" style="background:var(--muted)"><i data-icon="ellipsis" class="icon"></i></button>
+              <div class="menu" style="top:36px; right:16px; text-align:left" data-state="menu" hidden>
+                <div class="menu-item"><i data-icon="key-round" class="icon muted"></i>Manage keys</div>
+                <div class="menu-item"><i data-icon="webhook" class="icon muted"></i>Webhooks</div>
+                <div class="menu-item is-active"><i data-icon="filter" class="icon muted"></i>Edit limits</div>
+                <div class="menu-sep"></div>
+                <div class="menu-item is-destructive"><i data-icon="lock" class="icon"></i>Disable client</div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="medium">ERP</td>
+            <td><span class="mono">erp</span></td>
+            <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Active</span></td>
+            <td class="right tabular">1</td>
+            <td class="right tabular">47</td>
+            <td class="muted">Default</td>
+            <td class="muted">1 Nov 2026</td>
+            <td class="right"><button class="btn btn-ghost btn-icon-sm"><i data-icon="ellipsis" class="icon"></i></button></td>
+          </tr>
+          <tr class="is-dim">
+            <td class="medium">Old marketplace</td>
+            <td><span class="mono">marketplace</span></td>
+            <td><span class="badge badge-outline has-icon-start"><i data-icon="lock"></i>Disabled</span></td>
+            <td class="right tabular">0</td>
+            <td class="right tabular">0</td>
+            <td>Default</td>
+            <td>2 Mar 2026</td>
+            <td class="right"><button class="btn btn-ghost btn-icon-sm"><i data-icon="ellipsis" class="icon"></i></button></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="hint">Defaults: 120 requests a minute and 100 pending jobs per client, from this deployment's configuration.</p>
+  </main>
+
+  <template id="dialog-add">
+    <div class="dialog is-wide" role="dialog" aria-labelledby="add-title">
+      <div>
+        <h2 class="dialog-title" id="add-title">Add client</h2>
+        <p class="dialog-desc">A system that will call this block with its own keys.</p>
+      </div>
+      <div class="field">
+        <label class="label">Name</label>
+        <div class="input">Mobile backend</div>
+      </div>
+      <div class="field">
+        <label class="label">Id</label>
+        <div class="input is-mono is-invalid">mobile backend</div>
+        <p class="error-text">Use lowercase letters, digits and hyphens: for example <span class="mono">mobile-backend</span>.</p>
+        <p class="hint">Permanent. It appears in logs, webhooks and bus messages.</p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn">Add client</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="dialog-limits">
+    <div class="dialog is-wide" role="dialog" aria-labelledby="limits-title">
+      <div>
+        <h2 class="dialog-title" id="limits-title">Limits for Delivery app</h2>
+        <p class="dialog-desc">Leave a field empty to use this deployment's default.</p>
+      </div>
+      <div class="field">
+        <label class="label">Requests per minute</label>
+        <div class="input is-focus tabular">60</div>
+        <p class="hint">Default 120. Over the limit, requests get 429 with <span class="mono">Retry-After</span>.</p>
+      </div>
+      <div class="field">
+        <label class="label">Pending jobs</label>
+        <div class="input tabular">20</div>
+        <p class="hint">Default 100. Stops one client from pushing every other client back in the queue.</p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn">Save limits</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="dialog-disable">
+    <div class="dialog" role="alertdialog" aria-labelledby="disable-title">
+      <div>
+        <h2 class="dialog-title" id="disable-title">Disable Delivery app?</h2>
+        <p class="dialog-desc">
+          Every request with its keys will be refused with <span class="mono">CLIENT_DISABLED</span>. Its templates,
+          jobs and keys are kept, and you can enable it again.
+        </p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn btn-destructive">Disable client</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API keys</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body data-active="keys" data-client="ecommerce">
+  <!-- States: default · ?dialog=create · ?dialog=reveal · ?dialog=revoke · ?state=empty
+       · ?client=all (pick a client) · ?client=all&menu=client (switcher open) -->
+  <div data-shell></div>
+
+  <main class="main stack">
+    <header class="page-header">
+      <div>
+        <div data-eyebrow></div>
+        <h1 class="page-title">API keys</h1>
+        <p class="page-sub">What a client's backend sends as <span class="mono">X-Api-Key</span>. A key is shown once, when it is created.</p>
+      </div>
+      <button class="btn has-icon-start" data-when-client><i data-icon="plus" class="icon"></i>New key<span data-kbd="N"></span></button>
+    </header>
+
+    <!-- All clients: keys always belong to one client, so the page asks for one. -->
+    <section class="surface" data-when-all>
+      <div class="empty">
+        <div class="empty-icon"><i data-icon="building-2" class="icon"></i></div>
+        <p class="empty-title">Pick a client</p>
+        <p class="empty-desc">API keys belong to one client. Choose whose keys to manage.</p>
+        <div class="row" style="margin-top:8px">
+          <a class="btn btn-outline btn-sm" href="?client=ecommerce">E-commerce</a>
+          <a class="btn btn-outline btn-sm" href="?client=delivery">Delivery app</a>
+          <a class="btn btn-outline btn-sm" href="?client=erp">ERP</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empty -->
+    <section class="surface" data-when-client data-state="empty" hidden>
+      <div class="empty">
+        <div class="empty-icon"><i data-icon="key-round" class="icon"></i></div>
+        <p class="empty-title">No keys yet</p>
+        <p class="empty-desc">Create a key and put it in <span data-client-name></span>'s configuration. It is shown once.</p>
+        <button class="btn has-icon-start" style="margin-top:8px"><i data-icon="plus" class="icon"></i>Create a key</button>
+      </div>
+    </section>
+
+    <!-- List: status has its own column, as on Clients and Webhooks. -->
+    <section class="surface" data-when-client data-state-default>
+      <table class="table">
+        <thead>
+          <tr><th>Name</th><th>Status</th><th>Key</th><th>Scopes</th><th>Last used</th><th>Created</th><th><span class="sr-only"></span></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="medium">production</td>
+            <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Active</span></td>
+            <td><span class="mono muted">pdf_k7f2a9c1_…</span></td>
+            <td><span class="tags"><span class="tag">pdf:generate</span></span></td>
+            <td>3 minutes ago</td>
+            <td class="muted">12 Oct 2026</td>
+            <td class="actions"><button class="btn btn-ghost btn-icon-sm" aria-label="Actions for production"><i data-icon="ellipsis" class="icon"></i></button></td>
+          </tr>
+          <tr>
+            <td class="medium">templates-sync</td>
+            <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Active</span></td>
+            <td><span class="mono muted">pdf_p4d1e8b3_…</span></td>
+            <td><span class="tags"><span class="tag">pdf:templates:read</span><span class="tag">pdf:templates:write</span></span></td>
+            <td>2 days ago</td>
+            <td class="muted">20 Oct 2026</td>
+            <td class="actions"><button class="btn btn-ghost btn-icon-sm" aria-label="Actions for templates-sync"><i data-icon="ellipsis" class="icon"></i></button></td>
+          </tr>
+          <tr>
+            <td class="medium">staging</td>
+            <td><span class="badge badge-warning has-icon-start"><i data-icon="clock"></i>Expires in 6 days</span></td>
+            <td><span class="mono muted">pdf_m2b8e4d0_…</span></td>
+            <td><span class="tags"><span class="tag">pdf:generate</span></span></td>
+            <td class="muted">Never</td>
+            <td class="muted">1 Nov 2026</td>
+            <td class="actions"><button class="btn btn-ghost btn-icon-sm" aria-label="Actions for staging"><i data-icon="ellipsis" class="icon"></i></button></td>
+          </tr>
+          <tr class="is-dim">
+            <td class="medium">old-production</td>
+            <td><span class="badge badge-outline has-icon-start"><i data-icon="lock"></i>Revoked</span></td>
+            <td><span class="mono">pdf_x1c5a7f3_…</span></td>
+            <td><span class="tags"><span class="tag" style="color:var(--muted-foreground)">pdf:generate</span></span></td>
+            <td>4 Sep 2026</td>
+            <td>3 Jun 2026</td>
+            <td class="actions"></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="table-footer">
+        <span>4 keys · 3 active</span>
+        <span>Revoking takes effect within a minute.</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Create -->
+  <template id="dialog-create">
+    <div class="dialog is-wide" role="dialog" aria-labelledby="create-title">
+      <div>
+        <h2 class="dialog-title" id="create-title">New key for <span data-client-name></span></h2>
+        <p class="dialog-desc">The key is shown once, after you create it.</p>
+      </div>
+      <div class="field">
+        <label class="label">Name</label>
+        <div class="input is-focus">production-eu</div>
+        <p class="hint">Where the key is used, so you know what breaks when you revoke it.</p>
+      </div>
+      <div class="field">
+        <span class="label">Scopes</span>
+        <label class="row"><span class="checkbox is-checked"><i data-icon="check"></i></span><span class="tag">pdf:generate</span><span class="hint">Submit jobs, read them, get file links</span></label>
+        <label class="row"><span class="checkbox"></span><span class="tag">pdf:templates:read</span><span class="hint">List and read templates</span></label>
+        <label class="row"><span class="checkbox"></span><span class="tag">pdf:templates:write</span><span class="hint">Create, edit, publish, delete</span></label>
+      </div>
+      <div class="field">
+        <label class="label">Expires</label>
+        <div class="select">Never<i data-icon="chevron-down" class="icon"></i></div>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn">Create key</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Reveal: the only exit is the button; Escape and backdrop clicks do nothing. -->
+  <template id="dialog-reveal">
+    <div class="dialog is-wide" role="alertdialog" aria-labelledby="reveal-title">
+      <div>
+        <h2 class="dialog-title" id="reveal-title">Copy the new key</h2>
+        <p class="dialog-desc">production-eu · <span data-client-name></span></p>
+      </div>
+      <div class="secret">
+        <span class="value">pdf_r9k3m1v8_Q8vLx2Tn9WcZr4YpB6sK1dHf7MjG3aE0uVnR5tXo</span>
+        <button class="btn btn-sm has-icon-start"><i data-icon="copy" class="icon-sm"></i>Copy</button>
+      </div>
+      <div class="alert alert-warning">
+        <i data-icon="triangle-alert" class="icon"></i>
+        <div class="alert-title">Copy it now. It cannot be shown again.</div>
+        <div class="alert-desc">Store it in the product's secrets, never in source control.</div>
+      </div>
+      <div class="field">
+        <span class="label">In the product's configuration</span>
+        <div class="code"><span class="tk">"Blocks:Pdf:ApiKey"</span><span class="tp">:</span> <span class="ts">"pdf_r9k3m1v8_…"</span></div>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn">I have copied it</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Revoke -->
+  <template id="dialog-revoke">
+    <div class="dialog" role="alertdialog" aria-labelledby="revoke-title">
+      <div>
+        <h2 class="dialog-title" id="revoke-title">Revoke templates-sync?</h2>
+        <p class="dialog-desc">
+          Requests from <span data-client-name></span> using <span class="mono">pdf_p4d1e8b3_…</span> will be refused within a
+          minute. This cannot be undone.
+        </p>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn btn-destructive">Revoke key</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>
