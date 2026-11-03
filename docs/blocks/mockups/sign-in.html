@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body>
+  <!-- States: default · ?state=error · ?state=loading · ?brand=acme (dedicated deployment) -->
+  <main class="signin-page">
+    <div class="signin-brand"><span data-brand-logo></span><span data-brand-name></span></div>
+
+    <div class="card signin-card">
+      <div>
+        <h1 class="card-title">Sign in to the console</h1>
+        <p class="card-desc">Use this deployment's admin key.</p>
+      </div>
+
+      <div data-state="error" hidden>
+        <div class="alert alert-destructive">
+          <i data-icon="circle-x" class="icon"></i>
+          <div class="alert-title">That key was not accepted.</div>
+          <div class="alert-desc">Check you copied all of it. After 5 attempts, sign-in pauses for a minute.</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="key">Admin key</label>
+        <!-- Show/hide: a long key pasted blind is hard to check. Hidden by default. -->
+        <div class="input-group" data-state-default>
+          <div class="input is-mono is-focus"><span class="placeholder">Paste the adm_… key</span></div>
+          <button class="btn btn-ghost btn-icon-xs" aria-label="Show key" style="top:4px; right:4px"><i data-icon="eye" class="icon-sm muted"></i></button>
+        </div>
+        <div class="input-group" data-state="error" hidden>
+          <div class="input is-mono is-invalid">••••••••••••••••••••••••••••••••••</div>
+          <button class="btn btn-ghost btn-icon-xs" aria-label="Show key" style="top:4px; right:4px"><i data-icon="eye" class="icon-sm muted"></i></button>
+        </div>
+        <div class="input-group" data-state="loading" hidden>
+          <div class="input is-mono">••••••••••••••••••••••••••••••••••</div>
+          <button class="btn btn-ghost btn-icon-xs" aria-label="Show key" style="top:4px; right:4px" disabled><i data-icon="eye" class="icon-sm muted"></i></button>
+        </div>
+        <p class="hint">
+          Printed once by the installer. Lost it? Generate a new one with
+          <span class="mono">dotnet blocks admin-key</span> and update the configuration.
+        </p>
+      </div>
+
+      <div class="stack-sm">
+        <button class="btn" style="width:100%" data-state-default>Sign in</button>
+        <button class="btn" style="width:100%" data-state="error" hidden>Sign in</button>
+        <button class="btn has-icon-start" style="width:100%" data-state="loading" hidden disabled>
+          <i data-icon="loader-circle" class="icon spin"></i>Signing in
+        </button>
+      </div>
+    </div>
+
+    <p class="powered">Powered by PDF Builder 1.4.0</p>
+  </main>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>

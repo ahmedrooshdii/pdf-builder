@@ -1,23 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke-linecap="round" stroke-linejoin="round">
-  <!-- The same mark as src/app/core/layout/logo.ts. Inverts with the system theme, like the app. -->
+  <!-- The same mark as src/app/core/layout/logo.ts, in the app's primary tokens. Inverts with the system theme. -->
   <style>
-    .tile { fill: #18181b; } .ink { stroke: #fafafa; } .dot { fill: #fafafa; }
+    .tile { fill: #171717; } .ink { stroke: #fafafa; } .block { fill: #fafafa; }
     @media (prefers-color-scheme: dark) {
-      .tile { fill: #f4f4f5; } .ink { stroke: #18181b; } .dot { fill: #18181b; }
+      .tile { fill: #e5e5e5; } .ink { stroke: #171717; } .block { fill: #171717; }
     }
   </style>
   <rect width="32" height="32" rx="8" class="tile"/>
-  <g class="ink" stroke-width="1.5">
-    <g transform="rotate(-12 16 16) translate(-2.2 1.2)" opacity="0.45">
-      <path d="M9.5 7h8l4.5 4.5V25h-12.5z"/>
-    </g>
-    <path d="M10.5 6h8l4.5 4.5V24.5h-12.5z" class="tile"/>
-    <path d="M18.5 6v4.5h4.5"/>
-    <path d="M13.5 14h6" stroke-dasharray="1.6 1.6"/>
-    <path d="M13.5 17.5h4" stroke-dasharray="1.6 1.6"/>
-    <path d="M19.5 18.5h6.5v6.5h-6.5z" class="tile"/>
-    <path d="M21.5 18.5v-1.5h2.5v1.5"/>
-    <path d="M19.5 20.5h-1.5v2.5h1.5"/>
+  <g class="ink" stroke-width="1.75">
+    <path d="M10 6.5h7.5L22 11v6.5M14.5 25.5H10v-19"/>
+    <path d="M17.5 6.5V11H22"/>
+    <path d="M13 14.5h5"/>
   </g>
-  <circle cx="22.75" cy="21.75" r="1.1" class="dot"/>
+  <rect x="16.5" y="18.5" width="9" height="9" rx="2" class="block"/>
 </svg>

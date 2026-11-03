@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Overview</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body data-active="overview">
+  <!-- States: default (All clients, things need attention) · ?state=clear · ?client=ecommerce
+       · ?dialog=command · ?dialog=shortcuts · ?menu=client · ?menu=user · ?sidebar=collapsed -->
+  <div data-shell></div>
+
+  <main class="main stack">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Overview</h1>
+        <p class="page-sub">What needs you, and what every client is doing.</p>
+      </div>
+      <span class="hint row">Press <span data-kbd="?"></span> for shortcuts</span>
+    </header>
+
+    <div class="cols-2">
+      <!-- Needs attention: ordered by severity, each item links to where it is fixed. -->
+      <section class="stack-sm" data-state-default>
+        <div class="section-head"><h2 class="section-title">Needs attention</h2><span class="count">4</span></div>
+        <div class="surface attention">
+          <div class="attention-item">
+            <div class="attention-icon is-destructive"><i data-icon="webhook" class="icon"></i></div>
+            <div style="min-width:0">
+              <p class="medium">Webhook endpoint failing for 14 minutes</p>
+              <p class="hint">E-commerce · <span class="mono">n8n.example.com</span> · 503 · 1 delivery retrying</p>
+            </div>
+            <a class="btn btn-outline btn-sm" href="webhooks.html">View</a>
+          </div>
+          <div class="attention-item">
+            <div class="attention-icon is-destructive"><i data-icon="circle-x" class="icon"></i></div>
+            <div style="min-width:0">
+              <p class="medium">3 jobs failed today</p>
+              <p class="hint">ERP · <span class="mono">tax-invoice</span> · template error, retrying won't help</p>
+            </div>
+            <a class="btn btn-outline btn-sm" href="jobs.html?client=erp">View</a>
+          </div>
+          <div class="attention-item">
+            <div class="attention-icon is-warning"><i data-icon="key-round" class="icon"></i></div>
+            <div style="min-width:0">
+              <p class="medium">A key expires in 6 days</p>
+              <p class="hint">E-commerce · <span class="mono">staging</span> · never used</p>
+            </div>
+            <a class="btn btn-outline btn-sm" href="api-keys.html">View</a>
+          </div>
+          <div class="attention-item">
+            <div class="attention-icon is-muted"><i data-icon="layout-template" class="icon"></i></div>
+            <div style="min-width:0">
+              <p class="medium">Unpublished template changes</p>
+              <p class="hint">ERP · <span class="mono">credit-note</span> · edited 2 Nov, live version is 29 Oct</p>
+            </div>
+            <a class="btn btn-outline btn-sm" href="templates.html">View</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="stack-sm" data-state="clear" hidden>
+        <div class="section-head"><h2 class="section-title">Needs attention</h2><span class="count">0</span></div>
+        <div class="surface">
+          <div class="empty" style="padding:56px 24px">
+            <div class="empty-icon" style="background:var(--success-soft); color:var(--success)"><i data-icon="circle-check" class="icon"></i></div>
+            <p class="empty-title">All clear</p>
+            <p class="empty-desc">No failing webhooks, expiring keys or failed jobs in the last 24 hours.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Per-client activity: a table, not tiles, so it scales to any number of clients. -->
+      <section class="stack-sm">
+        <div class="row-between">
+          <div class="section-head"><h2 class="section-title">Clients</h2><span class="count">last 24 hours</span></div>
+          <a class="btn btn-ghost btn-sm" href="clients.html">Manage<i data-icon="arrow-right" class="icon-sm"></i></a>
+        </div>
+        <div class="surface">
+          <table class="table">
+            <thead><tr><th>Client</th><th class="right">Jobs</th><th class="right">Failed</th><th class="right">p95</th><th>Webhooks</th></tr></thead>
+            <tbody>
+              <tr><td><a class="link" href="jobs.html?client=ecommerce">E-commerce</a><span class="sub">last request just now</span></td><td class="right tabular">1,284</td><td class="right tabular">0</td><td class="right tabular">460 ms</td><td><span class="badge badge-warning has-icon-start"><i data-icon="triangle-alert"></i>1 failing</span></td></tr>
+              <tr><td><a class="link" href="jobs.html?client=delivery">Delivery app</a><span class="sub">9 minutes ago</span></td><td class="right tabular">312</td><td class="right tabular">0</td><td class="right tabular">290 ms</td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Healthy</span></td></tr>
+              <tr><td><a class="link" href="jobs.html?client=erp">ERP</a><span class="sub">1 hour ago</span></td><td class="right tabular">47</td><td class="right tabular" style="color:var(--destructive)">3</td><td class="right tabular">1.2 s</td><td><span class="muted">None</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="stack-sm">
+      <div class="row-between">
+        <div class="section-head"><h2 class="section-title">Recent jobs</h2><span class="count">all clients</span></div>
+        <a class="btn btn-ghost btn-sm" href="jobs.html">All jobs<span data-kbd="G then J"></span></a>
+      </div>
+      <div class="surface">
+        <table class="table">
+          <thead><tr><th>Template</th><th>Status</th><th>Client</th><th>Enqueued</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td><a class="link" href="jobs.html">invoice</a></td><td><span class="badge badge-secondary has-icon-start"><i data-icon="loader-circle" class="spin"></i>Pending</span></td><td>E-commerce</td><td>just now</td><td class="muted">Rendering…</td></tr>
+            <tr><td><a class="link" href="jobs.html">invoice</a></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td>E-commerce</td><td>2 minutes ago</td><td><span class="tabular">64.2 KB</span><span class="muted"> · 412 ms</span></td></tr>
+            <tr><td><a class="link" href="jobs.html">delivery-receipt</a></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td>Delivery app</td><td>9 minutes ago</td><td><span class="tabular">21.7 KB</span><span class="muted"> · 288 ms</span></td></tr>
+            <tr><td><a class="link" href="jobs.html">tax-invoice</a></td><td><span class="badge badge-destructive has-icon-start"><i data-icon="circle-x"></i>Failed</span></td><td>ERP</td><td>1 hour ago</td><td><span class="mono" style="color:var(--destructive)">TEMPLATE_RENDER_FAILED</span></td></tr>
+            <tr><td><a class="link" href="jobs.html">receipt</a></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td>Delivery app</td><td>5 hours ago</td><td><span class="tabular">12.8 KB</span><span class="muted"> · 233 ms</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>

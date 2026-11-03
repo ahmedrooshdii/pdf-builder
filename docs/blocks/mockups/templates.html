@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Templates</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body data-active="templates" data-client="erp">
+  <!-- States: default (two selected for export) · ?dialog=import · ?dialog=imported -->
+  <div data-shell></div>
+
+  <main class="main stack">
+    <header class="page-header">
+      <div>
+        <div data-eyebrow></div>
+        <h1 class="page-title">Templates</h1>
+        <p class="page-sub">
+          Jobs only ever render a template's published version, so editing a live template never breaks the documents being generated.
+        </p>
+      </div>
+      <div class="row">
+        <button class="btn btn-outline has-icon-start"><i data-icon="upload" class="icon"></i>Import</button>
+        <button class="btn has-icon-start"><i data-icon="plus" class="icon"></i>New template<span data-kbd="N"></span></button>
+      </div>
+    </header>
+
+    <div class="row-between" style="padding:6px 8px 6px 16px; border-radius:var(--radius); background:var(--muted)">
+      <span class="medium">2 selected</span>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm">Clear</button>
+        <button class="btn btn-outline btn-sm has-icon-start"><i data-icon="download" class="icon-sm"></i>Export pack</button>
+      </div>
+    </div>
+
+    <section class="surface">
+      <table class="table">
+        <thead>
+          <tr><th style="width:0"><span class="checkbox" style="background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14"/></svg></span></th><th>Key</th><th>Status</th><th>Updated</th><th>Published</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="checkbox is-checked"><i data-icon="check"></i></span></td>
+            <td><span class="row medium"><i data-icon="layout-template" class="icon muted"></i>tax-invoice</span></td>
+            <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Published</span></td>
+            <td class="muted">2 Nov 2026, 09:12</td>
+            <td class="muted">2 Nov 2026, 09:12</td>
+            <td class="actions"><span class="row" style="justify-content:flex-end"><button class="btn btn-ghost btn-icon-sm"><i data-icon="file-text" class="icon"></i></button><button class="btn btn-ghost btn-icon-sm"><i data-icon="ellipsis" class="icon"></i></button></span></td>
+          </tr>
+          <tr>
+            <td><span class="checkbox is-checked"><i data-icon="check"></i></span></td>
+            <td><span class="row medium"><i data-icon="layout-template" class="icon muted"></i>credit-note</span></td>
+            <td><span class="badge badge-warning has-icon-start"><i data-icon="circle-dot"></i>Modified</span></td>
+            <td class="muted">2 Nov 2026, 10:40</td>
+            <td class="muted">29 Oct 2026, 16:05</td>
+            <td class="actions"><span class="row" style="justify-content:flex-end"><button class="btn btn-ghost btn-icon-sm"><i data-icon="file-text" class="icon"></i></button><button class="btn btn-ghost btn-icon-sm"><i data-icon="ellipsis" class="icon"></i></button></span></td>
+          </tr>
+          <tr>
+            <td><span class="checkbox"></span></td>
+            <td><span class="row medium"><i data-icon="layout-template" class="icon muted"></i>delivery-note</span></td>
+            <td><span class="badge badge-secondary has-icon-start"><i data-icon="circle-dot"></i>Draft</span></td>
+            <td class="muted">1 Nov 2026, 18:22</td>
+            <td class="muted">—</td>
+            <td class="actions"><span class="row" style="justify-content:flex-end"><button class="btn btn-ghost btn-icon-sm"><i data-icon="ellipsis" class="icon"></i></button></span></td>
+          </tr>
+          <tr>
+            <td><span class="checkbox" style="opacity:.5"></span></td>
+            <td><span class="row medium"><i data-icon="layout-template" class="icon muted"></i>invoice</span></td>
+            <td><span class="badge badge-outline has-icon-start"><i data-icon="lock"></i>Built in</span></td>
+            <td class="muted">—</td>
+            <td class="muted">—</td>
+            <td class="actions"><span class="row" style="justify-content:flex-end"><button class="btn btn-ghost btn-icon-sm"><i data-icon="file-text" class="icon"></i></button><button class="btn btn-ghost btn-icon-sm"><i data-icon="ellipsis" class="icon"></i></button></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- Import preview: nothing is replaced unless ticked. -->
+  <template id="dialog-import">
+    <div class="dialog is-xwide" role="dialog" aria-labelledby="import-title">
+      <div>
+        <h2 class="dialog-title" id="import-title">Import into <span data-client-name></span></h2>
+        <p class="dialog-desc">
+          <span class="mono">acme-invoices-2026-11.pack.json</span> · exported from PDF Builder 1.4.0 on 2 Nov 2026
+        </p>
+      </div>
+      <div class="surface">
+        <table class="table">
+          <thead><tr><th>Template</th><th>In this deployment</th><th>Will</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="medium">receipt</td>
+              <td class="muted">Doesn't exist</td>
+              <td><span class="badge badge-success has-icon-start"><i data-icon="plus"></i>Create</span></td>
+            </tr>
+            <tr>
+              <td class="medium">credit-note</td>
+              <td class="muted">Doesn't exist</td>
+              <td><span class="badge badge-success has-icon-start"><i data-icon="plus"></i>Create</span></td>
+            </tr>
+            <tr>
+              <td class="medium">tax-invoice</td>
+              <td>Published, revision 7</td>
+              <td>
+                <label class="row"><span class="checkbox"></span><span>Replace</span></label>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="alert">
+        <i data-icon="info" class="icon muted"></i>
+        <div class="alert-title">Templates keep their draft and published versions.</div>
+        <div class="alert-desc"><span class="mono">tax-invoice</span> is skipped unless you tick Replace. The import happens all together or not at all.</div>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn">Import 2 templates</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="dialog-imported">
+    <div class="toast" role="status">
+      <i data-icon="circle-check" class="icon" style="color:var(--success)"></i>
+      <div class="grow">
+        <p class="medium">2 templates imported</p>
+        <p class="hint">receipt and credit-note are ready to publish.</p>
+      </div>
+    </div>
+  </template>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>

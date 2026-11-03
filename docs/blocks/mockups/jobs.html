@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jobs</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body data-active="jobs">
+  <!-- States: default (row selected, detail panel open) · ?state=list (panel closed) · ?client=ecommerce
+       · ?state=loading · ?state=empty · ?state=error · ?sidebar=collapsed -->
+  <div data-shell></div>
+
+  <main class="main is-split">
+    <!-- Left panel: the list. Resizable against the detail panel. -->
+    <section class="panel" style="flex: 1 1 62%">
+      <div class="panel-body" style="gap:16px; padding:24px 24px 16px">
+        <header class="page-header">
+          <div>
+            <h1 class="page-title">Jobs</h1>
+            <p class="page-sub">Every PDF this block has rendered, from products and from this console.</p>
+          </div>
+          <a class="btn has-icon-start" href="#"><i data-icon="plus" class="icon"></i>New PDF<span data-kbd="N"></span></a>
+        </header>
+        <div class="toolbar">
+          <div class="search" style="width:240px"><i data-icon="search" class="icon"></i><div class="input"><span class="placeholder">Filter jobs…</span></div><span style="position:absolute; right:6px; top:6px"><span data-kbd="/"></span></span></div>
+          <div class="select select-sm" style="width:auto"><span>Status: Any</span><i data-icon="chevron-down" class="icon-sm"></i></div>
+          <div class="select select-sm" style="width:auto"><span>Template: Any</span><i data-icon="chevron-down" class="icon-sm"></i></div>
+          <div class="select select-sm" style="width:auto"><i data-icon="calendar" class="icon-sm"></i><span>Last 7 days</span><i data-icon="chevron-down" class="icon-sm"></i></div>
+          <button class="btn btn-ghost btn-sm has-icon-start" style="margin-left:auto"><i data-icon="refresh-cw" class="icon-sm"></i>Refresh</button>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div data-state="loading" hidden style="border-top:1px solid var(--border)">
+        <table class="table">
+          <thead><tr><th>Template</th><th>Status</th><th data-when-all>Client</th><th>Enqueued</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td><span class="skeleton" style="width:120px"></span></td><td><span class="skeleton" style="width:88px;height:20px;border-radius:999px"></span></td><td data-when-all><span class="skeleton" style="width:84px"></span></td><td><span class="skeleton" style="width:96px"></span></td><td><span class="skeleton" style="width:110px"></span></td></tr>
+            <tr><td><span class="skeleton" style="width:96px"></span></td><td><span class="skeleton" style="width:88px;height:20px;border-radius:999px"></span></td><td data-when-all><span class="skeleton" style="width:64px"></span></td><td><span class="skeleton" style="width:96px"></span></td><td><span class="skeleton" style="width:90px"></span></td></tr>
+            <tr><td><span class="skeleton" style="width:136px"></span></td><td><span class="skeleton" style="width:88px;height:20px;border-radius:999px"></span></td><td data-when-all><span class="skeleton" style="width:72px"></span></td><td><span class="skeleton" style="width:96px"></span></td><td><span class="skeleton" style="width:120px"></span></td></tr>
+            <tr><td><span class="skeleton" style="width:110px"></span></td><td><span class="skeleton" style="width:88px;height:20px;border-radius:999px"></span></td><td data-when-all><span class="skeleton" style="width:80px"></span></td><td><span class="skeleton" style="width:96px"></span></td><td><span class="skeleton" style="width:100px"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty -->
+      <div data-state="empty" hidden style="border-top:1px solid var(--border)">
+        <div class="empty" style="padding:96px 24px">
+          <div class="empty-icon"><i data-icon="inbox" class="icon"></i></div>
+          <p class="empty-title">No jobs in the last 7 days</p>
+          <p class="empty-desc">Jobs appear here as soon as a product submits one. Widen the date range, or render one yourself.</p>
+          <div class="row" style="margin-top:8px">
+            <button class="btn btn-outline">Last 30 days</button>
+            <button class="btn has-icon-start"><i data-icon="plus" class="icon"></i>New PDF<span data-kbd="N"></span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div data-state="error" hidden style="border-top:1px solid var(--border)">
+        <div class="empty" style="padding:96px 24px">
+          <div class="empty-icon" style="background:var(--destructive-soft); color:var(--destructive)"><i data-icon="circle-x" class="icon"></i></div>
+          <p class="empty-title">Could not load jobs</p>
+          <p class="empty-desc">The API could not be reached. Check that the service is running, then try again.</p>
+          <button class="btn btn-outline has-icon-start" style="margin-top:8px"><i data-icon="refresh-cw" class="icon"></i>Try again</button>
+        </div>
+      </div>
+
+      <!-- List -->
+      <div class="panel-scroll" data-state-default data-state="list" style="border-top:1px solid var(--border)">
+        <table class="table">
+          <thead>
+            <tr><th>Template</th><th>Status</th><th data-when-all>Client</th><th>Enqueued</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><a class="link" href="#">invoice</a><span class="sub mono">08650000-b825…54be</span></td><td><span class="badge badge-secondary has-icon-start"><i data-icon="loader-circle" class="spin"></i>Pending</span></td><td data-when-all>E-commerce</td><td>just now</td><td class="muted">Rendering…</td></tr>
+            <tr class="is-selected"><td><a class="link" href="#">invoice</a><span class="sub mono">0864ffd2-7a10…91c3</span></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td data-when-all>E-commerce</td><td>2 minutes ago</td><td><span class="tabular">64.2 KB</span><span class="muted"> · 412 ms</span></td></tr>
+            <tr><td><a class="link" href="#">delivery-receipt</a><span class="sub mono">0864ff11-0c2e…7d08</span></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td data-when-all>Delivery app</td><td>9 minutes ago</td><td><span class="tabular">21.7 KB</span><span class="muted"> · 288 ms</span></td></tr>
+            <tr><td><a class="link" href="#">invoice</a><span class="sub mono">0864ff02-9b31…22f0</span></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td data-when-all>E-commerce</td><td>14 minutes ago</td><td><span class="tabular">63.9 KB</span><span class="muted"> · 398 ms</span></td></tr>
+            <tr><td><a class="link" href="#">tax-invoice</a><span class="sub mono">0864fe90-55ab…e112</span></td><td><span class="badge badge-destructive has-icon-start"><i data-icon="circle-x"></i>Failed</span></td><td data-when-all>ERP</td><td>1 hour ago</td><td><span class="mono" style="color:var(--destructive)">TEMPLATE_RENDER_FAILED</span></td></tr>
+            <tr><td><a class="link" href="#">tax-invoice</a><span class="sub mono">0864fe8a-1c07…9a4d</span></td><td><span class="badge badge-destructive has-icon-start"><i data-icon="circle-x"></i>Failed</span></td><td data-when-all>ERP</td><td>1 hour ago</td><td><span class="mono" style="color:var(--destructive)">TEMPLATE_RENDER_FAILED</span></td></tr>
+            <tr><td><a class="link" href="#">delivery-receipt</a><span class="sub mono">0864fe41-77d2…03bb</span></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td data-when-all>Delivery app</td><td>2 hours ago</td><td><span class="tabular">21.4 KB</span><span class="muted"> · 301 ms</span></td></tr>
+            <tr><td><a class="link" href="#">invoice</a><span class="sub mono">0864fe12-e0a9…5c61</span></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td data-when-all>E-commerce</td><td>3 hours ago</td><td><span class="tabular">65.0 KB</span><span class="muted"> · 5.1 s</span></td></tr>
+            <tr><td><a class="link" href="#">receipt</a><span class="sub mono">0864fd77-4b18…aa90</span></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td data-when-all>Delivery app</td><td>5 hours ago</td><td><span class="tabular">12.8 KB</span><span class="muted"> · 233 ms</span></td></tr>
+            <tr><td><a class="link" href="#">invoice</a><span class="sub mono">0864fc30-c2e4…71de</span></td><td><span class="badge badge-destructive has-icon-start"><i data-icon="circle-x"></i>Failed</span></td><td data-when-all>E-commerce</td><td>yesterday</td><td><span class="mono" style="color:var(--destructive)">RENDER_FAILED</span></td></tr>
+            <tr><td><a class="link" href="#">invoice</a><span class="sub mono">08648a2c-31f0…0a5e</span></td><td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span></td><td data-when-all>E-commerce</td><td>3 Oct 2026</td><td class="muted">File deleted after 30 days</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination: rows per page, position, numbered pages (console lists are offset-paged with a total). -->
+      <div class="pager-bar" data-state-default data-state="list">
+        <span>1–50 of 1,643</span>
+        <span class="rows">Rows per page <span class="select select-sm" style="width:64px">50<i data-icon="chevron-down" class="icon-sm"></i></span></span>
+        <nav class="pagination" aria-label="Pagination">
+          <span class="page-link is-disabled"><i data-icon="chevron-left" class="icon-sm"></i>Previous</span>
+          <a class="page-link is-active" aria-current="page">1</a>
+          <a class="page-link">2</a>
+          <a class="page-link">3</a>
+          <span class="page-ellipsis"><i data-icon="ellipsis" class="icon-sm"></i></span>
+          <a class="page-link">33</a>
+          <a class="page-link">Next<i data-icon="chevron-right" class="icon-sm"></i></a>
+        </nav>
+      </div>
+    </section>
+
+    <!-- Resize handle (drag to resize; double-click resets) -->
+    <div class="resize-handle" role="separator" aria-orientation="vertical" aria-valuenow="62" data-state-default>
+      <span class="grip"><i data-icon="grip-vertical"></i></span>
+    </div>
+
+    <!-- Right panel: detail of the selected job, without leaving the list. -->
+    <aside class="panel" style="flex: 1 1 38%; background:var(--background)" data-state-default aria-label="Job detail">
+      <div class="panel-head">
+        <span class="semibold" style="font-size:16px">invoice</span>
+        <span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Succeeded</span>
+        <span style="margin-left:auto" class="row">
+          <button class="btn btn-ghost btn-icon-sm" title="Open full page"><i data-icon="maximize-2" class="icon-sm"></i></button>
+          <button class="btn btn-ghost btn-icon-sm" title="Close (Esc)"><i data-icon="x" class="icon"></i></button>
+        </span>
+      </div>
+      <div class="panel-scroll">
+        <div class="panel-body">
+          <div class="row">
+            <button class="btn has-icon-start"><i data-icon="download" class="icon"></i>Download</button>
+            <button class="btn btn-outline has-icon-start"><i data-icon="eye" class="icon"></i>Preview</button>
+            <button class="btn btn-outline has-icon-start"><i data-icon="copy" class="icon"></i>Copy file link</button>
+          </div>
+
+          <dl class="kv" style="grid-template-columns:120px 1fr">
+            <dt>Client</dt><dd>E-commerce <span class="mono muted">ecommerce</span></dd>
+            <dt>Job</dt><dd class="row"><span class="mono">0864ffd2-7a10-4c55-b1e3-09ae3bd291c3</span><button class="btn btn-ghost btn-icon-xs"><i data-icon="copy" class="icon-xs"></i></button></dd>
+            <dt>Submitted by</dt><dd>API key <span class="mono muted">production</span></dd>
+            <dt>File</dt><dd>64.2 KB · A4 portrait · link expires in 58 min</dd>
+            <dt>Idempotency</dt><dd><span class="mono">invoice-ORD-10482</span></dd>
+          </dl>
+
+          <div class="stack-sm">
+            <h3 class="medium">Trace</h3>
+            <div class="trace">
+              <div class="trace-step"><i data-icon="circle-check" class="icon-sm" style="color:var(--success)"></i><span>Accepted<span class="sub hint">POST /api/pdf/jobs · 202</span></span><span class="when">10:46:12.004</span></div>
+              <div class="trace-step"><i data-icon="circle-check" class="icon-sm" style="color:var(--success)"></i><span>Picked up by worker</span><span class="when">+38 ms</span></div>
+              <div class="trace-step"><i data-icon="circle-check" class="icon-sm" style="color:var(--success)"></i><span>Template bound<span class="sub hint">invoice · published 29 Oct</span></span><span class="when">+51 ms</span></div>
+              <div class="trace-step"><i data-icon="circle-check" class="icon-sm" style="color:var(--success)"></i><span>Rendered by Chromium</span><span class="when">+371 ms</span></div>
+              <div class="trace-step"><i data-icon="circle-check" class="icon-sm" style="color:var(--success)"></i><span>Stored · webhook delivered<span class="sub hint">shop.example.com · 200</span></span><span class="when">+412 ms</span></div>
+            </div>
+          </div>
+
+          <div class="stack-sm">
+            <div class="row-between"><h3 class="medium">Payload</h3><span class="hint">1.8 KB</span></div>
+            <div class="code"><span class="tp">{</span>
+  <span class="tk">"invoiceNumber"</span><span class="tp">:</span> <span class="ts">"ORD-10482"</span><span class="tp">,</span>
+  <span class="tk">"customer"</span><span class="tp">: {</span> <span class="tk">"name"</span><span class="tp">:</span> <span class="ts">"Mona Adel"</span> <span class="tp">},</span>
+  <span class="tk">"items"</span><span class="tp">: [</span> <span class="tp">…</span> <span class="tn">3</span> <span class="tp">items ],</span>
+  <span class="tk">"total"</span><span class="tp">:</span> <span class="tn">1249.50</span>
+<span class="tp">}</span></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>

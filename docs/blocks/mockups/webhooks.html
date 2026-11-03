@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Webhooks</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+</head>
+<body data-active="webhooks" data-client="ecommerce">
+  <!-- States: default · ?dialog=add · ?dialog=secret · ?dialog=delivery · ?client=all -->
+  <div data-shell></div>
+
+  <main class="main stack">
+    <header class="page-header">
+      <div>
+        <div data-eyebrow></div>
+        <h1 class="page-title">Webhooks</h1>
+        <p class="page-sub">Where this block tells a client that a job finished. Deliveries are signed and retried for about a day.</p>
+      </div>
+      <button class="btn has-icon-start" data-when-client><i data-icon="plus" class="icon"></i>Add endpoint<span data-kbd="N"></span></button>
+    </header>
+
+    <section class="surface" data-when-all>
+      <div class="empty">
+        <div class="empty-icon"><i data-icon="building-2" class="icon"></i></div>
+        <p class="empty-title">Pick a client</p>
+        <p class="empty-desc">Webhook endpoints belong to one client. Choose one from the switcher.</p>
+      </div>
+    </section>
+
+    <section class="stack-sm" data-when-client>
+      <div class="section-head"><h2 class="section-title">Endpoints</h2><span class="count">2</span></div>
+      <div class="surface">
+        <table class="table">
+          <thead><tr><th>URL</th><th>Status</th><th>Events</th><th>Last delivery</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">https://shop.example.com/hooks/pdf</span></td>
+              <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Healthy</span></td>
+              <td><span class="tags"><span class="tag">job.succeeded</span><span class="tag">job.failed</span></span></td>
+              <td>2 minutes ago <span class="mono muted">· 200</span></td>
+              <td class="actions"><button class="btn btn-ghost btn-icon-sm" aria-label="Actions"><i data-icon="ellipsis" class="icon"></i></button></td>
+            </tr>
+            <tr>
+              <td><span class="mono">https://n8n.example.com/webhook/invoices</span></td>
+              <td><span class="badge badge-warning has-icon-start"><i data-icon="triangle-alert"></i>Failing</span></td>
+              <td><span class="tags"><span class="tag">job.succeeded</span></span></td>
+              <td>14 minutes ago <span class="mono" style="color:var(--destructive)">· 503</span></td>
+              <td class="actions"><button class="btn btn-ghost btn-icon-sm" aria-label="Actions"><i data-icon="ellipsis" class="icon"></i></button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="stack-sm" data-when-client>
+      <div class="row-between">
+        <div class="section-head"><h2 class="section-title">Recent deliveries</h2><span class="count">last 24 hours</span></div>
+        <div class="tabs">
+          <span class="tab is-active">All</span><span class="tab">Failed</span><span class="tab">Retrying</span>
+        </div>
+      </div>
+      <div class="surface">
+        <table class="table">
+          <thead><tr><th>Status</th><th>Event</th><th>Endpoint</th><th>Message</th><th class="right">Attempts</th><th>Last attempt</th><th>Next</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge-success has-icon-start"><i data-icon="circle-check"></i>Delivered</span></td>
+              <td><span class="tag">job.succeeded</span></td>
+              <td class="muted">shop.example.com</td>
+              <td><span class="mono muted">msg_2f8c1a0e9b7d</span></td>
+              <td class="right tabular">1</td>
+              <td>2 minutes ago · <span class="mono">200</span></td>
+              <td class="muted">–</td>
+              <td class="actions"><i data-icon="chevron-right" class="icon muted"></i></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-secondary has-icon-start"><i data-icon="refresh-cw"></i>Retrying</span></td>
+              <td><span class="tag">job.succeeded</span></td>
+              <td class="muted">n8n.example.com</td>
+              <td><span class="mono muted">msg_9a31d7c2e04f</span></td>
+              <td class="right tabular">3</td>
+              <td>14 minutes ago · <span class="mono" style="color:var(--destructive)">503</span></td>
+              <td>in 16 minutes</td>
+              <td class="actions"><i data-icon="chevron-right" class="icon muted"></i></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-destructive has-icon-start"><i data-icon="circle-x"></i>Failed</span></td>
+              <td><span class="tag">job.failed</span></td>
+              <td class="muted">shop.example.com</td>
+              <td><span class="mono muted">msg_51be08aa77c3</span></td>
+              <td class="right tabular">7</td>
+              <td>yesterday · <span class="mono" style="color:var(--destructive)">timeout</span></td>
+              <td class="muted">Gave up</td>
+              <td class="actions"><button class="btn btn-outline btn-xs has-icon-start"><i data-icon="send" class="icon-xs"></i>Redeliver</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <template id="dialog-add">
+    <div class="dialog is-wide" role="dialog" aria-labelledby="add-title">
+      <div>
+        <h2 class="dialog-title" id="add-title">Add endpoint for <span data-client-name></span></h2>
+        <p class="dialog-desc">HTTPS only. Private and local addresses are refused.</p>
+      </div>
+      <div class="field">
+        <label class="label">URL</label>
+        <div class="input is-mono is-focus">https://shop.example.com/hooks/pdf</div>
+      </div>
+      <div class="field">
+        <span class="label">Events</span>
+        <label class="row"><span class="checkbox is-checked"><i data-icon="check"></i></span><span class="mono">job.succeeded</span></label>
+        <label class="row"><span class="checkbox is-checked"><i data-icon="check"></i></span><span class="mono">job.failed</span></label>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn">Add endpoint</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="dialog-secret">
+    <div class="dialog is-wide" role="alertdialog" aria-labelledby="secret-title">
+      <div>
+        <h2 class="dialog-title" id="secret-title">Copy the signing secret</h2>
+        <p class="dialog-desc">The product uses it to check that deliveries came from this block (Standard Webhooks).</p>
+      </div>
+      <div class="secret">
+        <span class="value">whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw</span>
+        <button class="btn btn-outline btn-sm has-icon-start"><i data-icon="copy" class="icon-sm"></i>Copy</button>
+      </div>
+      <div class="alert alert-warning">
+        <i data-icon="triangle-alert" class="icon"></i>
+        <div class="alert-title">Copy it now. It cannot be shown again.</div>
+      </div>
+      <div class="dialog-footer">
+        <button class="btn">I have copied it</button>
+      </div>
+    </div>
+  </template>
+
+  <template id="dialog-delivery">
+    <div class="dialog is-xwide" role="dialog" aria-labelledby="delivery-title">
+      <div class="row-between">
+        <div>
+          <h2 class="dialog-title" id="delivery-title">job.succeeded</h2>
+          <p class="dialog-desc"><span class="mono">msg_9a31d7c2e04f</span> · n8n.example.com</p>
+        </div>
+        <span class="badge badge-secondary has-icon-start"><i data-icon="refresh-cw"></i>Retrying</span>
+      </div>
+      <dl class="kv">
+        <dt>Attempts</dt><dd>3 of 7 · next in 16 minutes</dd>
+        <dt>Last response</dt><dd><span class="mono" style="color:var(--destructive)">503 Service Unavailable</span> after 1.2 s</dd>
+        <dt>Created</dt><dd>2 Nov 2026, 09:46 UTC</dd>
+      </dl>
+      <div class="code"><span class="tp">{</span>
+  <span class="tk">"type"</span><span class="tp">:</span> <span class="ts">"job.succeeded"</span><span class="tp">,</span>
+  <span class="tk">"timestamp"</span><span class="tp">:</span> <span class="ts">"2026-11-02T09:46:12Z"</span><span class="tp">,</span>
+  <span class="tk">"data"</span><span class="tp">: {</span>
+    <span class="tk">"clientId"</span><span class="tp">:</span> <span class="ts">"ecommerce"</span><span class="tp">,</span>
+    <span class="tk">"jobId"</span><span class="tp">:</span> <span class="ts">"0864ffd2-7a10-…-91c3"</span><span class="tp">,</span>
+    <span class="tk">"templateKey"</span><span class="tp">:</span> <span class="ts">"invoice"</span><span class="tp">,</span>
+    <span class="tk">"fileUrl"</span><span class="tp">:</span> <span class="ts">"https://pdf.example.com/files/a7e0…?expires=…&amp;sig=…"</span><span class="tp">,</span>
+    <span class="tk">"sizeBytes"</span><span class="tp">:</span> <span class="tn">64210</span>
+  <span class="tp">}</span>
+<span class="tp">}</span></div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline">Close</button>
+        <button class="btn has-icon-start"><i data-icon="send" class="icon"></i>Redeliver now</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+</body>
+</html>

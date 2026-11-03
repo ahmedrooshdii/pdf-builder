@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logo options</title>
+  <link rel="stylesheet" href="assets/mockups.css" />
+  <style>
+    .logo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .logo-card { border: 1px solid var(--border); border-radius: var(--radius-xl); overflow: hidden; display: flex; flex-direction: column; }
+    .logo-stage { display: grid; grid-template-columns: 1fr 1fr; }
+    .logo-stage > div { display: flex; align-items: flex-end; justify-content: center; gap: 20px; padding: 28px 16px; }
+    .logo-stage .light { background: #ffffff; --primary: #171717; --primary-foreground: #fafafa; }
+    .logo-stage .dark-bg { background: #0a0a0a; --primary: #e5e5e5; --primary-foreground: #171717; }
+    .s64 .brand-logo { width: 64px; height: 64px; }
+    .s32 .brand-logo { width: 32px; height: 32px; }
+    .s16 .brand-logo { width: 16px; height: 16px; }
+    .logo-meta { padding: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+    .in-context { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: var(--radius-md); background: var(--sidebar); border: 1px solid var(--sidebar-border); }
+    .in-context .brand-logo { width: 32px; height: 32px; }
+  </style>
+</head>
+<body>
+  <main class="main stack" style="max-width:1280px">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Logo options</h1>
+        <p class="page-sub">
+          Each at 64, 32 (sidebar) and 16 px (browser tab), on light and dark. All are drawn in the theme's primary
+          colours, so they invert with dark mode. Pick one and every mockup uses it.
+        </p>
+      </div>
+      <a class="btn btn-outline" href="index.html">Back to screens</a>
+    </header>
+
+    <div class="logo-grid" id="grid"></div>
+
+    <div class="alert">
+      <i data-icon="circle-check" class="icon" style="color:var(--success)"></i>
+      <div class="alert-title">Chosen: A · Page and block</div>
+      <div class="alert-desc">
+        It is the mark in the app (<span class="mono">web/public/logo.svg</span> and the <span class="mono">Logo</span>
+        component). For other blocks, keep the docked block and swap the page for the block's own glyph.
+      </div>
+    </div>
+  </main>
+
+  <script src="assets/icons.js"></script>
+  <script src="assets/mockups.js"></script>
+  <script>
+    const meta = {
+      a: ['A · Page and block', 'The current idea, simplified: no tilt, no dashed lines, so it stays legible at 16px.'],
+      b: ['B · Blocks', 'Three blocks and a page. Says “one of a set of blocks” as well as “PDF”.'],
+      c: ['C · Folded page', 'One bold silhouette. Strongest as a favicon, least specific about blocks.'],
+    };
+    const current = (() => { try { return localStorage.getItem('mockups.logo') || 'a'; } catch { return 'a'; } })();
+    document.getElementById('grid').innerHTML = Object.keys(LOGOS).map((k) => `
+      <div class="logo-card" style="${k === current ? 'box-shadow:0 0 0 2px var(--primary)' : ''}">
+        <div class="logo-stage">
+          <div class="light"><span class="s64">${LOGOS[k]}</span><span class="s32">${LOGOS[k]}</span><span class="s16">${LOGOS[k]}</span></div>
+          <div class="dark-bg"><span class="s64">${LOGOS[k]}</span><span class="s32">${LOGOS[k]}</span><span class="s16">${LOGOS[k]}</span></div>
+        </div>
+        <div class="logo-meta">
+          <div class="row-between"><span class="medium">${meta[k][0]}</span>${k === current ? '<span class="badge badge-default">In use</span>' : `<a class="btn btn-outline btn-sm" href="?logo=${k}">Use this</a>`}</div>
+          <p class="hint">${meta[k][1]}</p>
+          <div class="in-context">${LOGOS[k]}<span class="sb-title"><b>PDF Builder</b><span>Console · v1.4.0</span></span></div>
+        </div>
+      </div>`).join('');
+  </script>
+</body>
+</html>
