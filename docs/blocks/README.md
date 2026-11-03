@@ -33,17 +33,13 @@ starts to fit. See [01-business.md](01-business.md#phases).
 
 ## Using these with spec-kit
 
-spec-kit (1.2.0) is installed but not initialised in this repository. Initialising adds
-`.specify/` and the agent commands:
+spec-kit (1.2.0) is initialised in this repository (`.specify/`, with the Claude skills in
+`.claude/skills/`). In order:
 
-```bash
-specify init --here --integration claude
-```
-
-Then, in order:
-
-1. **`/speckit.constitution`**: paste the [constitution seed](#constitution-seed) below. Every
-   later plan is checked against it, so it is the single most important input.
+1. **The constitution** is ratified at
+   [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md): ten principles, each
+   ending with the gate `/speckit-plan` checks. It is the single most important input, and it
+   overrides these documents where they disagree.
 2. **`/speckit.specify`**: one feature at a time, from the backlog in
    [03-planning.md](03-planning.md#feature-backlog). Each backlog entry has a ready-to-paste
    description. Specs describe *what* and *why*, so give it the business and UI/UX documents as
@@ -55,45 +51,23 @@ Then, in order:
 Keep these documents as the source of truth. When a spec or plan makes a decision that changes
 one of them, update the document in the same pull request.
 
-## Constitution seed
+## Constitution
 
-Paste this into `/speckit.constitution`. Each principle is one that a later decision could
-plausibly break, which is why it is written down.
+The principles that used to be seeded here are now
+[the constitution](../../.specify/memory/constitution.md), and are maintained only there:
 
-0. **One codebase, no customer forks.** Every deployment runs the same released images. Whatever
-   differs between deployments (domain, secrets, branding, limits, templates, fonts, workflows) is
-   configuration or data. A customer need that configuration cannot meet is either built into the
-   main codebase, off by default, or belongs in the customer's orchestration. Never a branch.
-1. **A block stands alone.** It owns its database, configuration and deployment. It never reads
-   another block's database and never requires another block to be running in order to start.
-   Test: deleting any other block leaves this one healthy.
-2. **A block knows nothing about the products using it.** No product vocabulary (order, customer,
-   restaurant) appears in a block's code, contracts or schema. A block's data is scoped by
-   `ClientId` and nothing else.
-3. **Blocks do not call each other.** Products compose blocks. When blocks must fit together, they
-   do it through shared conventions (a PDF block returns a URL; an email block accepts attachment
-   URLs), not through dependencies.
-4. **Every block exposes the same studs.** API-key auth producing `client_id` and `scopes` claims,
-   RFC 9457 problem details with a stable `code`, `202 Accepted` plus a status URL for slow work,
-   `Idempotency-Key`, signed webhooks, signed expiring file URLs, `/health/live` and
-   `/health/ready`. A block that cannot follow a stud documents why.
-5. **Code reads identity from claims only.** Nothing below the authentication handler knows whether
-   a `client_id` came from an API key, a session cookie or a future JWT. That is what lets the auth
-   mechanism change without touching features.
-6. **Published contracts change additively.** Message interfaces, error codes and HTTP response
-   shapes gain optional members in minor versions. Removing or renaming anything is a major version
-   and a new URL or message type.
-7. **Generic capabilities only.** A block is a technical capability (render, send, store, notify,
-   charge). Business concepts (orders, carts, catalogues) belong to products and are never blocks.
-8. **Secrets are stored as hashes and shown once.** API keys, webhook secrets and admin keys are
-   never stored or logged in a recoverable form.
-9. **Layering is enforced by tooling, not by convention.** Backend: `Api -> Infrastructure ->
-   Application -> Domain -> Contracts`. Frontend: `core`/`shared`/`features` rules in ESLint.
-10. **Runs on any customer's hardware, offline.** Every image builds for `linux/arm64` and
-    `linux/amd64`, and needs no internet access at runtime: no CDNs, no telemetry by default, no
-    licence call-home.
-11. **Nothing is hardcoded to one deployment.** No domain, product name, logo or limit is written
-    in code. A value a company could want different is a configuration key with a default.
+| | Principle |
+| --- | --- |
+| I | One codebase, no customer forks |
+| II | A block stands alone |
+| III | Generic capabilities, no product knowledge |
+| IV | Products compose; blocks never call each other |
+| V | Every block exposes the same studs |
+| VI | Identity comes from claims only |
+| VII | Published contracts change additively |
+| VIII | Secrets are unrecoverable and shown once |
+| IX | Layering is enforced by tooling |
+| X | Runs on any customer's hardware, offline |
 
 ## Decisions still open
 
