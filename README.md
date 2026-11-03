@@ -30,17 +30,18 @@ they start as drafts and are only used by jobs once published. See
 
 ### With Docker
 
-The one command that gets Chromium, its fonts and RabbitMQ all at once:
+The one command that gets Chromium, its fonts, RabbitMQ and PostgreSQL all at once:
 
 ```bash
 docker compose up --build
 # API docs:    http://localhost:8080/scalar/v1
 # RabbitMQ UI: http://localhost:15672   (guest / guest)
+# PostgreSQL:  localhost:5432           (pdf_builder / pdf_builder, this local stack only)
 ```
 
 ### Without Docker
 
-Install Chromium once, point the service at a broker, and run it:
+Install Chromium once, point the service at a broker and a database, and run it:
 
 ```bash
 dotnet build
@@ -57,8 +58,25 @@ dotnet user-secrets --project src/PdfBuilder.Api \
   set "RabbitMq:ConnectionString" "amqps://user:pass@host.rmq.cloudamqp.com/vhost"
 ```
 
+Jobs and the templates written in the web app are stored in PostgreSQL, and the service will not
+start without a connection string: there is no in-memory fallback. A free hosted database (Neon, for
+example) or a local install both work. The string goes in user-secrets, like the broker's:
+
+```bash
+dotnet user-secrets --project src/PdfBuilder.Api \
+  set "ConnectionStrings:Database" "Host=localhost;Database=pdf_builder;Username=…;Password=…"
+```
+
+The schema is created on first start. If you are upgrading from a version that kept templates as
+files, they are imported once, automatically; see
+[operations.md](docs/operations.md#upgrading-from-file-based-templates).
+
+> **Running in Development loads your user-secrets**, which may point at a real broker, and a local
+> process started that way joins the real queue as a consumer. When you only want to look at the
+> service, run it with `ASPNETCORE_ENVIRONMENT=Production`: user-secrets are not loaded.
+
 Check `/health/ready` returns 200 before sending work. `/health/live` answering while `/health/ready`
-returns 503 means the broker is unreachable.
+returns 503 means a dependency (the broker or the database) is unreachable.
 
 ## Trying it
 
@@ -91,13 +109,22 @@ Other ways in:
 ## Tests
 
 ```bash
-dotnet test                                      # fast: no browser, no broker
+dotnet test                                      # fast: no browser, no broker, no database
 PDFBUILDER_RUN_BROWSER_TESTS=1 dotnet test       # also launches real Chromium
+PDFBUILDER_RUN_DATABASE_TESTS=1 dotnet test      # also starts PostgreSQL in Docker
 ```
 
-93 tests. The browser-backed ones are opt-in so the default loop stays quick, and they are the ones
-that prove a real PDF comes out, that the browser recycles correctly mid-flight, and that hosts
-outside the allow-list are actually blocked — so CI should run the second form.
+The browser-backed tests are opt-in so the default loop stays quick, and they are the ones that
+prove a real PDF comes out, that the browser recycles correctly mid-flight, and that hosts outside
+the allow-list are actually blocked. The database-backed ones prove the stores, the migration, the
+one-time template import and the job outbox against a real PostgreSQL. CI runs both.
+
+Without Docker, point the database tests at a server you already have; every test gets its own
+database on it and drops it afterwards:
+
+```bash
+PDFBUILDER_RUN_DATABASE_TESTS=1 PDFBUILDER_TEST_POSTGRES="Host=localhost;Username=postgres;Password=…" dotnet test
+```
 
 ## Layout
 
@@ -157,7 +184,7 @@ turns the Chromium and apt layers from the better part of an hour into minutes.
 
 ## Known limits
 
-Two things are single-instance today, and both bite at the same moment: PDFs are stored on local
-disk, and job state is held in memory. Implementing `IFileStorage` over object storage and
-`IPdfJobStore` over Redis are each a two-method job — do both before adding a replica. Stored PDFs
-are also never deleted. [Operations](docs/operations.md#known-gaps) has the detail.
+Job status and authored templates are shared by every instance, but generated PDFs are still stored
+on local disk, so a download that lands on an instance that did not render the file gets a 404.
+Implementing `IFileStorage` over object storage is a two-method job; do it before adding a replica.
+Stored PDFs are also never deleted. [Operations](docs/operations.md#known-gaps) has the detail.

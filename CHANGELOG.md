@@ -36,6 +36,35 @@ matching.
 - A job submitted over HTTP whose render failed on every retry stayed `Pending` forever. The last
   attempt now marks it `Failed` with `RENDER_FAILED`. Bus requesters still receive a `Fault<T>`.
 
+### Changed (service)
+
+None of this touches the package: the HTTP responses, the messages and the error codes are exactly
+what they were, and the contracts version does not change for it.
+
+- **Jobs and authored templates are stored in PostgreSQL**, so they survive restarts and are shared
+  by every instance. Job status was in process memory, and templates were JSON files on one machine.
+  A job stays pollable for `JobStore:RetentionHours` after its last update, as before.
+- **A job and the message that starts it are committed together**, through MassTransit's EF Core
+  outbox (still 8.5.x, Apache-2.0). A failure between the two can no longer leave a job that is
+  `Pending` forever, or a message for a job nobody can poll.
+- **A new failure response:** while the database is unreachable, requests that need it answer
+  `503` with `code: STORAGE_UNAVAILABLE` and `Retry-After: 5`, and `/health/ready` reports not ready
+  (liveness is unaffected). Nothing is accepted that cannot be recorded.
+- **Authored templates are imported once.** On the first start against an empty database, the files
+  of the previous version are imported, and left untouched so the upgrade can be rolled back. A file
+  that cannot be imported is skipped and reported in the logs, not fatal.
+
+#### Upgrading
+
+- **A PostgreSQL database is now required.** Set `ConnectionStrings:Database`; the service does not
+  start without it, and there is no in-memory fallback. The schema is created on first start
+  (`Blocks:Database:MigrateOnStartup`, default `true`). `compose.yaml` and `deploy/compose.prod.yaml`
+  now include one.
+- **Jobs still in flight in the old version are lost once**, because they lived only in its memory.
+- `TemplateStore:AuthoredRootPath` is only read, once, for the import, and can be removed afterwards.
+- Generated PDFs are still on local disk: a second instance cannot yet serve a file another instance
+  rendered.
+
 ### Note for implementers of `IGeneratePdfRequest`
 
 Adding `PageSetup` to the interface is source- and binary-breaking for a class of your own that

@@ -92,6 +92,25 @@ throughput is. It is a development broker, not a production one.
 > why it is the default. Every host you add is a host a template author can make the server talk to
 > from inside your network. Add specific hosts, never a wildcard.
 
+## Database
+
+Jobs and the templates written in the web app live in PostgreSQL, so they survive a restart and
+every instance of the service sees them. The connection string has no default and no fallback:
+the service refuses to start without it, naming the setting.
+
+```json
+"ConnectionStrings": { "Database": "Host=localhost;Database=pdf_builder;Username=pdf_builder;Password=…" },
+"Blocks": { "Database": { "MigrateOnStartup": true } }
+```
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `ConnectionStrings:Database` | none, **required** | An Npgsql connection string for this service's own PostgreSQL database (version 14 or later). It carries a password, so keep it in user-secrets or an environment variable (`ConnectionStrings__Database`), never in a committed file. It is never logged or returned in a response. |
+| `Blocks:Database:MigrateOnStartup` | `true` | Apply pending schema migrations when the service starts. EF Core takes a database lock while it does, so several instances starting together are safe: one migrates, the others wait. Set it to `false` if migrations are applied by a separate deployment step; the service then refuses to start against an out-of-date schema and names the migrations it is missing. |
+
+For local development without Docker, a free hosted PostgreSQL (Neon, for example) or a local
+install both work; with Docker, `docker compose up` starts one for you.
+
 ## Storage
 
 ```json
@@ -112,7 +131,7 @@ throughput is. It is a development broker, not a production one.
 | Key | Default | Notes |
 | --- | --- | --- |
 | `RootPath` | `Templates` | The built-in templates: `{templateKey}.html`, with optional `.options.json` and `.sample.json` siblings. `/app/Templates` in the container, where `compose.yaml` mounts the repository's `templates/` folder read-only and CI replaces it on every deploy. |
-| `AuthoredRootPath` | `data/templates` | Templates written in the web app, one `{templateKey}.json` each. Must be writable and must survive deploys: `/data/templates` in the container, on the data volume. Never point it inside `RootPath`, which CI wipes. |
+| `AuthoredRootPath` | `data/templates` | Where earlier versions kept templates written in the web app, one `{templateKey}.json` each. They now live in the [database](#database). This directory is read **once**, on the first start against an empty database, to import what is there; it is never written to or changed, so it can be removed after a successful upgrade, and the upgrade can be rolled back. `/data/templates` in the container. See [operations.md](operations.md#upgrading-from-file-based-templates). |
 
 ## TemplateEngine
 
@@ -132,7 +151,7 @@ throughput is. It is a development broker, not a production one.
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `RetentionHours` | `24` | 1–168. How long a finished job stays pollable. State is in process memory, so it is also lost on restart. |
+| `RetentionHours` | `24` | 1–168. How long a job stays pollable after its last update. Jobs are in the [database](#database): a restart does not shorten this, and every instance honours it. A job past it is gone from the API at once and deleted from the table within the hour. |
 
 ## Logging
 
@@ -153,6 +172,7 @@ scope, so a structured sink can show every line for one job together.
 ## Environment variables you will actually set
 
 ```bash
+ConnectionStrings__Database="Host=postgres;Database=pdf_builder;Username=pdf_builder;Password=…"
 RabbitMq__Host=rabbitmq
 RabbitMq__Username=pdf-builder
 RabbitMq__Password=…

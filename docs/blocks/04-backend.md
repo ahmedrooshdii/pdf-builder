@@ -281,23 +281,33 @@ through the `PdfBuilder.Contracts` package version.
 
 ### Persistence
 
-- `PdfDbContext` in `PdfBuilder.Infrastructure/Persistence/`, deriving from the stud
-  `BlocksDbContext` (which brings `clients`, `api_keys`, `webhook_*`, Data Protection keys and the
-  client query filter).
-- Entities `TemplateEntity`, `PdfJobEntity`, `FileEntity`, mapped to and from the domain records.
-  The domain stays free of EF.
-- `EfPdfJobStore : IPdfJobStore` and `EfAuthoredTemplateStore : IAuthoredTemplateStore` replace the
-  in-memory and file stores. The revision check becomes a concurrency token on `revision`, so the
-  process-wide lock in `FileAuthoredTemplateStore` is no longer needed.
-- **Transactional outbox.** Today the endpoint saves the job, then publishes, as two steps. With
-  MassTransit's EF Core outbox (`AddEntityFrameworkOutbox<PdfDbContext>(o => { o.UsePostgres();
-  o.UseBusOutbox(); })`), the job row and the message commit together. The consumer gets the inbox
-  for free, which deduplicates redelivered messages.
-- **One-time import.** On start, if `templates` is empty and `TemplateStore:AuthoredRootPath`
-  contains files, they are imported under `Blocks:Bus:DefaultClientId` and the directory is left
-  untouched for rollback.
-- `JobStore:RetentionHours` stops meaning "forgotten from memory". Job rows are kept; a sweeper
-  deletes rows older than `JobStore:RetentionDays` (default 90).
+Built in feature 001 (`specs/001-persistent-storage`), before clients exist:
+
+- `PdfBuilderDbContext` in `PdfBuilder.Infrastructure/Persistence/`. It does **not** yet derive from
+  the stud `BlocksDbContext` (clients, API keys, webhooks, Data Protection keys, the client query
+  filter): that package is extracted from this context by feature 002, when a second set of tables
+  exists to extract it from.
+- Records `PdfJobRecord`, `AuthoredTemplateRecord` and `TemplateImportRecord`, converted to and from
+  the domain types, which stay free of EF. There is no `FileEntity`: generated files stay behind
+  `IFileStorage` until feature 005. Template content is stored as `jsonb` using the property names the
+  old files used.
+- `EfPdfJobStore` and `EfAuthoredTemplateStore` replace the in-memory and file stores. The revision
+  check is a conditional update on `revision`, so the process-wide lock the file store needed is gone;
+  keys are unique ignoring case through a generated `key_lower` column.
+- **Transactional outbox, bus side only.** The endpoint publishes, then saves; MassTransit's EF Core
+  bus outbox (`AddEntityFrameworkOutbox<PdfBuilderDbContext>` with `UsePostgres()` and
+  `UseBusOutbox()`, 8.5.11) commits the job row and the message together. The consumer outbox and
+  inbox are deliberately not used: they change how retries and the final `RENDER_FAILED` transition
+  interact, which this feature does not need.
+- **One-time import**, under a PostgreSQL advisory lock, recorded in `template_imports`, so it runs once
+  however many instances start together. Files are read, never changed. There is no client to import
+  them under yet: feature 003 adds `client_id`, backfills it from `Blocks:Bus:DefaultClientId` and adds
+  the query filter in one migration.
+- `JobStore:RetentionHours` keeps its meaning, default (24) and range (1–168), counted from the
+  job's last save as before: reads apply the cut-off, and an hourly sweeper deletes the rows past
+  it, so a job stops being pollable at the same moment it does today, but a restart no longer
+  shortens that. Longer history is left to feature 010, which may raise the default when the console
+  lists jobs (decided in `specs/001-persistent-storage`).
 
 ### Client scoping
 

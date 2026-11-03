@@ -1,0 +1,27 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using PdfBuilder.Contracts;
+using PdfBuilder.Infrastructure.Persistence.Records;
+
+namespace PdfBuilder.Infrastructure.Persistence.Configurations;
+
+/// <summary>Table <c>pdf_jobs</c>, as laid out in specs/001-persistent-storage/data-model.md.</summary>
+internal static class PdfJobConfiguration
+{
+    public static void Configure(EntityTypeBuilder<PdfJobRecord> job)
+    {
+        // The three names PdfJobStatus has, as the API returns them. A typo in a writer fails here.
+        job.ToTable("pdf_jobs", table => table.HasCheckConstraint(
+            "ck_pdf_jobs_status", "status IN ('Pending', 'Succeeded', 'Failed')"));
+
+        job.HasKey(j => j.JobId);
+        job.Property(j => j.JobId).ValueGeneratedNever();
+
+        // "≤ 64 chars": the template key limit published in PdfRequestLimits, validated before insert.
+        job.Property(j => j.TemplateKey).HasMaxLength(PdfRequestLimits.TemplateKeyMaxLength).IsRequired();
+        job.Property(j => j.Status).IsRequired();
+
+        // Retention filters and the sweeper both look at this column.
+        job.HasIndex(j => j.LastSavedAt).HasDatabaseName("ix_pdf_jobs_last_saved_at");
+    }
+}

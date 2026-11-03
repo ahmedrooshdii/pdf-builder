@@ -18,6 +18,8 @@
   <ItemGroup>
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Lets `dotnet ef` use this project as the startup project; nothing from it ships. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
 

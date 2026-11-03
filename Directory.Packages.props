@@ -17,6 +17,19 @@
     <PackageVersion Include="Scriban" Version="7.5.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Persistence">
+    <!--
+      EF Core is pinned in one band so the provider, the design-time tools and MassTransit's outbox
+      (which only asks for >= 10.0.0) all resolve to the same assemblies.
+    -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.12" />
+  </ItemGroup>
+
   <ItemGroup Label="Hosting">
     <!--
       MassTransit 9 is commercially licensed and refuses to start without MT_LICENSE.
@@ -24,6 +37,8 @@
       See docs/architecture.md for the upgrade path if a licence is purchased.
     -->
     <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.11" />
+    <!-- Same line as MassTransit.RabbitMQ: the transactional outbox that commits a job and its message together. -->
+    <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.11" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.17.14" />
   </ItemGroup>
@@ -39,6 +54,7 @@
   <ItemGroup Label="Testing">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>

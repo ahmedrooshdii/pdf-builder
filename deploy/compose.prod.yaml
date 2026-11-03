@@ -5,10 +5,42 @@
 # uses for its memory than a RabbitMQ nobody else talks to, and CloudAMQP is already provisioned.
 
 services:
+  # Jobs and authored templates live here, so this volume is the thing to back up
+  # (`docker compose exec postgres pg_dump -U pdf_builder pdf_builder`). It is not published on any
+  # port: only the API, on this compose network, can reach it.
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pdf_builder
+      POSTGRES_USER: pdf_builder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdf_builder -d pdf_builder"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   api:
     # CI pins this to the exact digest it just built. The default is only for manual runs.
     image: ${PDF_BUILDER_IMAGE:-ghcr.io/ahmedrooshdii/pdf-builder:latest}
     restart: unless-stopped
+
+    # The schema is applied on start, so the database only has to be accepting connections.
+    depends_on:
+      postgres:
+        condition: service_healthy
 
     # Bound to localhost: the reverse proxy terminates TLS and is the only thing that should be
     # reachable from outside. Publishing 8080 directly would expose the API with no TLS and,
@@ -22,11 +54,13 @@ services:
       # Secrets and anything host-specific come from .env, which lives only on the VM.
       RabbitMq__ConnectionString: ${RABBITMQ_CONNECTION_STRING:?set RABBITMQ_CONNECTION_STRING in .env}
       Storage__PublicBaseUrl: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
+      ConnectionStrings__Database: Host=postgres;Database=pdf_builder;Username=pdf_builder;Password=${POSTGRES_PASSWORD}
 
       Storage__RootPath: /data/files
       TemplateStore__RootPath: /app/Templates
-      # Templates written in the web app. On the volume, unlike the built-in ones above, so they
-      # survive every deploy; CI never touches this directory.
+      # Where earlier versions kept templates written in the web app. Read once, on the first start
+      # against an empty database, to import them; never written, and CI never touches it. Templates
+      # now live in PostgreSQL.
       TemplateStore__AuthoredRootPath: /data/templates
 
       # 2 OCPU on the Always Free tier. Each concurrent render costs roughly a browser tab, and
@@ -66,3 +100,4 @@ services:
 
 volumes:
   pdf-data:
+  postgres-data:

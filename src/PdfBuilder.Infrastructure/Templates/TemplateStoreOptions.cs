@@ -14,9 +14,10 @@ public sealed class TemplateStoreOptions
     public string RootPath { get; init; } = "Templates";
 
     /// <summary>
-    /// Directory for templates written through the API. Must be writable and must survive
-    /// deployments, so in a container it belongs on the data volume, never next to
-    /// <see cref="RootPath"/>. Relative paths resolve against the app directory.
+    /// Where the previous version kept templates written through the API, as one JSON file each.
+    /// Templates now live in the database; this directory is read <b>once</b>, on the first start
+    /// against an empty database, to import what is there, and is never written or changed. After a
+    /// successful upgrade it can be removed. Relative paths resolve against the app directory.
     /// </summary>
     [Required]
     public string AuthoredRootPath { get; init; } = "data/templates";
