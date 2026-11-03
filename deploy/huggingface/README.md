@@ -13,9 +13,10 @@ itself from [src/PdfBuilder.Api/Dockerfile](../../src/PdfBuilder.Api/Dockerfile)
 - **It sleeps after 48 hours without HTTP requests.** That stops the RabbitMQ consumer too.
   [keep-alive.yml](../../.github/workflows/keep-alive.yml) pings it twice a day to prevent that.
 - **The disk is wiped on every restart and every deploy.** Generated PDFs are disposable anyway
-  (they are kept for 24 hours). **Templates authored in the web app are lost**, though. Built-in
-  templates in `templates/` are unaffected, so commit any template you want to keep there.
-  Persistent storage is a paid Space add-on.
+  (they are kept for 24 hours). Jobs and the templates authored in the web app are **not** on that
+  disk: they live in a PostgreSQL database that the Space connects to (see the setup below), so
+  they survive. That database is therefore required here, and it has to be hosted elsewhere; a free
+  tier from Neon or Supabase is enough. Persistent storage on the Space itself is a paid add-on.
 - **Visibility matters.** A public Space exposes the API, which has no authentication, to anyone
   who finds the URL. A private Space only answers requests that carry a Hugging Face token. A
   consumer-only setup, where everything arrives through RabbitMQ, works fine as private.
@@ -39,6 +40,7 @@ itself from [src/PdfBuilder.Api/Dockerfile](../../src/PdfBuilder.Api/Dockerfile)
    | Kind | Name | Value |
    | --- | --- | --- |
    | Secret | `RabbitMq__ConnectionString` | The `amqps://` URI from CloudAMQP |
+   | Secret | `ConnectionStrings__Database` | The Npgsql connection string of a hosted PostgreSQL, for example `Host=<host>;Database=<db>;Username=<user>;Password=<password>;SSL Mode=Require`. Hosted databases require TLS. |
    | Variable | `Storage__PublicBaseUrl` | `https://<owner>-<space-name>.hf.space` |
 
    The URL is shown under *⋯ → Embed this Space → Direct URL*. Underscores and capitals in the
@@ -61,8 +63,11 @@ itself from [src/PdfBuilder.Api/Dockerfile](../../src/PdfBuilder.Api/Dockerfile)
 
 ## When it fails
 
+- **The Space stops at start-up with `ConnectionStrings:Database is required`.** The secret above is
+  missing or empty. **With `The database schema is out of date`** the schema could not be applied:
+  check the database user may create tables.
 - **The job says `/health/ready` did not answer 200.** The Space started, but a dependency check is
-  failing, almost always RabbitMQ. Check the container logs for the connection error. If
+  failing, RabbitMQ or the database. Check the container logs for the connection error. If
   connections to CloudAMQP time out, try its non-TLS port: replace `amqps://` with `amqp://` in the
   secret. Credentials then cross the network unencrypted, so only do this to diagnose the problem.
 - **Stage `BUILD_ERROR`.** The image did not build. The build log on the Space page has the same

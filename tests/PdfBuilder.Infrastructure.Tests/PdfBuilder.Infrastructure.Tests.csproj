@@ -4,4 +4,8 @@
     <ProjectReference Include="..\..\src\PdfBuilder.Infrastructure\PdfBuilder.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
 </Project>

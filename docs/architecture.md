@@ -17,8 +17,9 @@ HTTP request thread.
  HTTP caller ──► │  POST /api/pdf/jobs                                                                  │
                  │       │                                                                              │
                  │       ├─ validate (the command's own validator, reused)  ──► 400 on bad input        │
-                 │       ├─ record job as Pending            ──► IPdfJobStore                           │
-                 │       ├─ publish IGeneratePdfRequest       ──► RabbitMQ                              │
+                 │       ├─ publish IGeneratePdfRequest ─┐                                               │
+                 │       ├─ record job as Pending ───────┴─► PostgreSQL (one transaction)                │
+                 │       │                                   └─ outbox ─► RabbitMQ, after commit         │
                  │       └─ 202 Accepted + statusUrl                                                    │
                  │                                                      │                               │
                  │                                                      ▼                               │
@@ -27,7 +28,7 @@ HTTP request thread.
                  │                                       GeneratePdfCommandHandler                      │
                  │                                                      │                               │
                  │        IPdfTemplateRepository ─► ITemplateEngine ─► IPdfRenderer ─► IFileStorage      │
-                 │          (file system)           (Scriban)          (Playwright)    (local disk)      │
+                 │          (db + files)            (Scriban)          (Playwright)    (local disk)      │
                  │                                                      │                               │
                  │                                  ┌───────────────────┴──────────────────┐            │
                  │                                  ▼                                      ▼            │
@@ -93,9 +94,43 @@ broker being used as a file server: slow, memory-hungry, and bounded by frame si
 Bus callers get `IGeneratePdfResponse` — that is the real interface, and it needs no polling.
 
 HTTP callers cannot receive a bus response, so `IPdfJobStore` records job state for them to poll.
-The current implementation keeps that state in process memory. **This is the main thing standing
-between you and a second replica**: a poll load-balanced to an instance that never saw the job
-returns 404. See [operations.md](operations.md#scaling-past-one-instance).
+That state is in PostgreSQL, so it survives a restart and a poll can land on any instance. See
+[Jobs and authored templates live in the database](#jobs-and-authored-templates-live-in-the-database).
+
+### Accepting a job is atomic
+
+Accepting a job means two writes: the job's record, and the message that starts the work. Done one
+after the other, a failure between them leaves either a job that is `Pending` forever (recorded,
+never queued) or a message for a job nobody can poll (queued, never recorded).
+
+The HTTP endpoint publishes the request through MassTransit's **EF Core bus outbox** and then saves
+the job. The publish only queues the message in the database context; the save commits it together
+with the job row, in one transaction, and a background delivery service then moves it to RabbitMQ.
+So a job is either both recorded and queued, or neither, and a worker can never start before the
+job it reports on exists.
+
+Only the HTTP side uses the outbox. The consumer is left as it was (no consumer inbox or outbox):
+it already tolerates redelivery, and changing it would change how retries and the final
+`RENDER_FAILED` transition interact. This is MassTransit 8.5.x, still Apache-2.0.
+
+### Jobs and authored templates live in the database
+
+`IPdfJobStore` and `IAuthoredTemplateStore` are implemented over PostgreSQL (EF Core, Npgsql); the
+built-in templates stay on disk because they ship in the image.
+
+- **Jobs** keep the retention they always had: a job is readable for `JobStore:RetentionHours`
+  after its **last save** (every save used to give it a fresh expiry). Reads apply the cut-off
+  themselves; an hourly sweeper only deletes what is past it.
+- **Templates** keep their revision check, now done by the database: an update names the revision
+  it was based on and matches only that row, so two instances cannot both win. A unique index on
+  the lower-cased key keeps keys unique ignoring case, as the catalog always did.
+- **Records, not domain types.** `PdfJob` and `AuthoredTemplate` have private constructors and are
+  never mapped directly; each table has a record in `Infrastructure/Persistence/Records/` that
+  converts to and from the domain type. Stored JSON uses the property names the old template files
+  used, which is also how the one-time import reads them.
+- **The schema is applied on start**, before the bus connects and before the server listens, and
+  the one-time import of the old template files runs right after it, under a database lock so that
+  it happens once however many instances start together.
 
 ### Concurrency is bounded in two places, deliberately matched
 

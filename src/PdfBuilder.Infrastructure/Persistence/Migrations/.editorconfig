@@ -1,0 +1,5 @@
+# EF Core writes these files, and regenerates them with every `dotnet ef migrations add`, so
+# hand-fixing what the analyzers say about them would be undone by the next migration.
+# Everything else in the project keeps the repository's strict analyzer settings.
+[*.cs]
+generated_code = true

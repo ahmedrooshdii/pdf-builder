@@ -15,6 +15,24 @@ services:
       timeout: 5s
       retries: 10
 
+  # Jobs and authored templates live here, so they survive `docker compose down` (but not
+  # `down -v`). The credentials are for this local stack only; see deploy/ for real ones.
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pdf_builder
+      POSTGRES_USER: pdf_builder
+      POSTGRES_PASSWORD: pdf_builder
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdf_builder -d pdf_builder"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: .
@@ -24,9 +42,12 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       RabbitMq__Host: rabbitmq
+      ConnectionStrings__Database: Host=postgres;Database=pdf_builder;Username=pdf_builder;Password=pdf_builder
       Storage__PublicBaseUrl: http://localhost:8080
     volumes:
       - pdf-data:/data
@@ -46,3 +67,4 @@ services:
 
 volumes:
   pdf-data:
+  postgres-data:

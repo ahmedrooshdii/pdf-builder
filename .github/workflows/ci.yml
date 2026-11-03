@@ -59,9 +59,13 @@ jobs:
       # The browser-backed tests are the ones that prove a PDF actually comes out, that the
       # browser recycles correctly mid-flight, and that hosts outside the allow-list are blocked.
       # They are opt-in locally to keep the inner loop fast; CI has no reason to skip them.
+      # The same goes for the database tests, which start PostgreSQL in Docker through
+      # Testcontainers (ubuntu-latest has Docker) and prove the stores, the migration, the
+      # template import and the job/message outbox against a real server.
       - name: Test
         env:
           PDFBUILDER_RUN_BROWSER_TESTS: "1"
+          PDFBUILDER_RUN_DATABASE_TESTS: "1"
         run: dotnet test PdfBuilder.slnx --configuration Release --no-build
 
   web:

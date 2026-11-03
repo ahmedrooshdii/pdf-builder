@@ -24,8 +24,11 @@ public static class DependencyInjection
             services.AddValidatorsFromAssembly(assembly, includeInternalTypes: false);
 
             // The render pipeline sees published templates only; the catalog sees everything, for editing.
-            services.AddSingleton<TemplateCatalog>();
-            services.AddSingleton<IPdfTemplateRepository, PublishedTemplateRepository>();
+            // Scoped, not singleton: both read the authored templates, which live in the database,
+            // and a singleton cannot hold the scoped DbContext behind them. Every caller already runs
+            // in a scope: a request, or a message being consumed.
+            services.AddScoped<TemplateCatalog>();
+            services.AddScoped<IPdfTemplateRepository, PublishedTemplateRepository>();
 
             return services;
         }

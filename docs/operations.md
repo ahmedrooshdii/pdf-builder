@@ -22,21 +22,57 @@ The container runs as the non-root `app` user and exposes `8080`.
 | `/data` | Rendered PDFs. Must survive restarts, or every `FileUrl` already handed out breaks. |
 | `/app/Templates` | Template content. Mount it to change templates without rebuilding. |
 
+Jobs and authored templates are **not** on a volume of this container: they are in PostgreSQL, whose
+data directory is the thing to back up. `pg_dump` of the service's database is a complete backup of
+them.
+
 ### Must-set configuration
+
+`ConnectionStrings__Database` is the connection string of the service's PostgreSQL database. There is
+no default and no in-memory fallback: without it the service does not start, and says which setting
+is missing. See [configuration.md](configuration.md#database).
 
 `Storage__PublicBaseUrl` has to be the address callers can reach, not the container's. It is what
 `FileUrl` is built from, so getting it wrong means every response hands out a dead link —
 and nothing fails until a caller tries to download.
+
+### First start and upgrades
+
+On start the service applies any pending schema migrations (`Blocks:Database:MigrateOnStartup`), so
+there is no separate migration step to run. Several instances starting together are safe: EF Core
+takes a database lock and one of them migrates.
+
+On the **very first** start against an empty database, EF Core logs two `Failed executing DbCommand`
+errors for `SELECT … FROM "__EFMigrationsHistory"`. They are expected, because the table does not
+exist yet, and are followed by `Database schema brought up to date`. They do not appear again.
+
+### Upgrading from file-based templates
+
+Earlier versions kept templates written in the web app as JSON files in
+`TemplateStore:AuthoredRootPath`. On the first start against an empty database the service imports
+every readable file, once, and logs `Imported N authored template(s) from …`. Then:
+
+- **Nothing is re-imported on later starts**, even though the files are still there. A template
+  deleted after the upgrade stays deleted.
+- **The files are never changed or removed.** To roll back, start the previous version; it finds
+  its files as it left them. Templates edited after the upgrade are not carried back.
+- **A file that cannot be imported is skipped, not fatal**, and logged as a warning naming the file
+  and why: `malformed` (not valid template JSON), `invalid-key`, `built-in-key` (a template that
+  ships with the service has the same key, ignoring case), `duplicate-key` or `unreadable`. The
+  list is also kept in the `template_imports` table.
+- **Jobs that were in flight in the old version are lost once**, on the upgrade itself: they lived
+  only in its memory. A caller that polls one gets 404, as it would have after any restart before.
 
 ## Health
 
 | Endpoint | Meaning | Wire it to |
 | --- | --- | --- |
 | `/health/live` | The process is up. Runs no dependency checks. | Liveness probe |
-| `/health/ready` | Dependencies are usable: RabbitMQ is connected and the template directory exists. | Readiness probe |
+| `/health/ready` | Dependencies are usable: RabbitMQ is connected, the database answers, and the template directory exists. | Readiness probe |
 
-The split matters. Restarting a container because RabbitMQ is briefly unreachable makes an outage
-worse; readiness just takes the instance out of rotation until it recovers.
+The split matters. Restarting a container because RabbitMQ or the database is briefly unreachable
+makes an outage worse; readiness just takes the instance out of rotation until it recovers, and it
+recovers by itself when the dependency returns, without restarting the service.
 
 The template-directory check exists because an unmounted volume is the most common deployment
 mistake here, and without the check it shows up as every job failing `TEMPLATE_NOT_FOUND`.
@@ -65,6 +101,9 @@ termination grace period, or rolling deployments will cut jobs off mid-render.
 | HTTP jobs fail `RENDER_FAILED` after retries (bus callers get a `Fault<T>`) | Chromium OOM, or a template waiting on a blocked asset | Container memory; `--disable-dev-shm-usage` present; `Playwright:AllowedHosts` |
 | `FileUrl` 404s for the caller | `Storage:PublicBaseUrl` wrong, or more than one replica on local disk | [Scaling past one instance](#scaling-past-one-instance) |
 | Boxes instead of glyphs | Font family not in the image | Add the font package to the Dockerfile |
+| Requests answer `503` with `code: STORAGE_UNAVAILABLE` and a `Retry-After`; `/health/ready` is 503 while `/health/live` is 200 | The database is unreachable | The connection string, the database server, the network. Nothing was accepted; callers can retry. |
+| Service will not start, `ConnectionStrings:Database is required` | The connection string is not set | [configuration.md](configuration.md#database) |
+| Service will not start, `The database schema is out of date` | `MigrateOnStartup` is `false` and migrations were not applied | Apply the migrations it names, or set it to `true` |
 | `_error` queue filling up | Transient failures exhausting retries | Consumer logs for the `CorrelationId` |
 | Service will not start, `License must be specified` | MassTransit bumped back to 9.x | Pin 8.5.x, or set `MT_LICENSE` |
 
@@ -73,21 +112,18 @@ sink can show one job's whole history together.
 
 ## Scaling past one instance
 
-Two things are single-instance today, and both will bite at the same moment:
+Job status and authored templates are in PostgreSQL, so every instance sees them: a poll of
+`/api/pdf/jobs/{id}` can land on any instance, and a template published through one is what all of
+them render. Instances start safely together (one migrates, one imports).
+
+One thing is still single-instance:
 
 **Local file storage.** A download request load-balanced to an instance that did not render the
 file gets a 404. Fix: implement `IFileStorage` over blob/object storage. It is one interface with
 two methods, and nothing above it changes.
 
-**In-memory job store.** A poll of `/api/pdf/jobs/{id}` can land on an instance that never saw the
-job. Fix: implement `IPdfJobStore` over Redis or a table. Also two methods. Note that `PdfJob` has a
-private constructor, so a persistent implementation should map to its own DTO rather than
-serialising the domain record directly.
-
-Bus callers are unaffected by either: they get their result from `IGeneratePdfResponse`, not from
-the job store.
-
-Do both before adding a replica. Until then, run one instance and scale vertically.
+Bus callers are unaffected: they get their result from `IGeneratePdfResponse`. Until files are
+shared, run one instance and scale vertically, or pin downloads to the instance that rendered them.
 
 ## Known gaps
 
@@ -103,10 +139,6 @@ proxy logs, browser history and email. If documents are sensitive, put authentic
 **No metrics or traces.** Render duration, queue depth and browser recycle rate are the first three
 numbers worth having. OpenTelemetry would slot in at `Program.cs` — MassTransit and ASP.NET Core
 both instrument themselves already.
-
-**Job state is lost on restart.** A job submitted over HTTP and still pending when the process
-restarts becomes unpollable, even though the message survives in RabbitMQ and will still be
-rendered. Resolved by the same change that makes the job store shared.
 
 ## Tests in CI
 

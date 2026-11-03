@@ -4,4 +4,13 @@
     <ProjectReference Include="..\..\src\PdfBuilder.Api\PdfBuilder.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+  <!-- One PostgreSQL fixture for every test project that needs a database, rather than a copy of it. -->
+  <ItemGroup>
+    <Compile Include="..\PdfBuilder.Infrastructure.Tests\Persistence\PostgresFixture.cs" Link="Persistence\PostgresFixture.cs" />
+  </ItemGroup>
+
 </Project>

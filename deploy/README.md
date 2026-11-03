@@ -93,15 +93,30 @@ Write `/opt/pdf-builder/.env` — this file holds the only secrets on the box, a
 is ever committed:
 
 ```bash
-cat > /opt/pdf-builder/.env <<'EOF'
+cat > /opt/pdf-builder/.env <<EOF
 RABBITMQ_CONNECTION_STRING=amqps://user:pass@host.rmq.cloudamqp.com/vhost
 PUBLIC_BASE_URL=https://pdf.example.com
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
 EOF
 chmod 600 /opt/pdf-builder/.env
 ```
 
 `PUBLIC_BASE_URL` must be the address **callers** reach, not the VM's. It is what every `fileUrl`
 is built from, so getting it wrong hands out dead links and nothing fails until someone clicks one.
+
+`POSTGRES_PASSWORD` protects the service's own PostgreSQL, which `compose.yaml` runs next to it, on
+the compose network only (no published port). Jobs and the templates written in the web app live
+there. `openssl rand -hex 24` gives letters and digits only, which matters: the password is spliced
+into a connection string, where `;` or `=` would break it. **Set it before the first deploy and do
+not change it afterwards** without also changing it inside the database: the data volume keeps the
+password it was created with. The deploy fails fast, naming the variable, if it is missing.
+
+Back it up with `docker compose exec postgres pg_dump -U pdf_builder pdf_builder > backup.sql`.
+Until you do, the Oracle VM is the only copy of your templates.
+
+On the first start after upgrading from a version without a database, templates that were stored as
+files under `/data/templates` are imported once, automatically; see
+[docs/operations.md](../docs/operations.md#upgrading-from-file-based-templates).
 
 ## 6. Make the image pullable
 
@@ -181,16 +196,18 @@ docker compose logs -f api
 
 ## What this setup does not give you
 
-**One instance only.** PDFs live on a Docker volume on this VM and job state lives in the
-process's memory, so a second replica would serve 404s for files and jobs it never saw. Both are
-two-method interfaces — see [operations.md](../docs/operations.md#scaling-past-one-instance).
+**One instance only.** PDFs live on a Docker volume on this VM, so a second replica would serve
+404s for files it did not render. Job status and templates are in PostgreSQL and are already
+shared; files are the one thing left, and `IFileStorage` is a two-method interface — see
+[operations.md](../docs/operations.md#scaling-past-one-instance).
 
-**No backups.** The `pdf-data` volume is on the boot disk. Oracle's Always Free tier includes
-block volume backups; turn them on if the documents matter after the VM does not.
+**No backups.** The `pdf-data` and `postgres-data` volumes are on the boot disk. Oracle's Always
+Free tier includes block volume backups; turn them on if the documents matter after the VM does
+not, and take a `pg_dump` too: the templates written in the web app exist nowhere else.
 
 **Brief downtime on deploy.** `compose up -d` stops the old container before the new one is
-ready. With one instance and in-memory job state there is nothing to fail over to, so a few
-seconds of 502 is the honest cost. In-flight renders are not cut off — the container is given 60
+ready. With one instance there is nothing to fail over to, so a few seconds of 502 is the honest
+cost; job status survives it, because it is in the database. In-flight renders are not cut off — the container is given 60
 seconds to drain, matching the host's shutdown timeout.
 
 **Stored PDFs are never deleted.** Watch the volume, or add a cron job over `/var/lib/docker/

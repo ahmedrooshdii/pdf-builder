@@ -1,8 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using PdfBuilder.Application.Abstractions;
 using PdfBuilder.Infrastructure.Jobs;
+using PdfBuilder.Infrastructure.Persistence;
 using PdfBuilder.Infrastructure.Rendering;
 using PdfBuilder.Infrastructure.Storage;
 using PdfBuilder.Infrastructure.Templates;
@@ -21,6 +24,11 @@ public static class DependencyInjection
             services.AddValidatedOptions<TemplateStoreOptions>(configuration, TemplateStoreOptions.Section);
             services.AddValidatedOptions<TemplateEngineOptions>(configuration, TemplateEngineOptions.Section);
             services.AddValidatedOptions<JobStoreOptions>(configuration, JobStoreOptions.Section);
+            services.AddValidatedOptions<DatabaseOptions>(configuration, DatabaseOptions.Section);
+
+            // First, so it starts first: the schema must be current before the message bus begins
+            // consuming and before the web server begins listening.
+            services.AddPersistence(configuration);
 
             services.AddMemoryCache();
 
@@ -28,13 +36,42 @@ public static class DependencyInjection
             // PlaywrightPdfRenderer must be one because it owns the shared Chromium process.
             services.AddSingleton<ITemplateEngine, ScribanTemplateEngine>();
             services.AddSingleton<IBuiltInTemplateSource, FileSystemTemplateRepository>();
-            services.AddSingleton<IAuthoredTemplateStore, FileAuthoredTemplateStore>();
+            services.AddScoped<IAuthoredTemplateStore, EfAuthoredTemplateStore>();
             services.AddSingleton<IPdfRenderer, PlaywrightPdfRenderer>();
             services.AddSingleton<IFileStorage, LocalFileStorage>();
-            services.AddSingleton<IPdfJobStore, InMemoryPdfJobStore>();
+
+            // Scoped, like the DbContext they write through: the job store and the bus outbox must
+            // share one context per request or message so that a job and its message commit together.
+            services.AddScoped<IPdfJobStore, EfPdfJobStore>();
+            services.AddHostedService<JobRetentionSweeper>();
 
             services.AddHealthChecks()
-                .AddCheck<TemplateStoreHealthCheck>("template-store", HealthStatus.Unhealthy, tags: ["ready"]);
+                .AddCheck<TemplateStoreHealthCheck>("template-store", HealthStatus.Unhealthy, tags: ["ready"])
+                .AddDbContextCheck<PdfBuilderDbContext>("database", HealthStatus.Unhealthy, tags: ["ready"]);
+
+            return services;
+        }
+
+        /// <summary>
+        /// The database and what keeps its schema current. The connection string is required and has
+        /// no fallback: a quiet in-memory mode is exactly the failure this storage exists to remove.
+        /// </summary>
+        private IServiceCollection AddPersistence(IConfiguration configuration)
+        {
+            var connectionString = configuration.GetConnectionString(DatabaseOptions.ConnectionStringName);
+
+            // Checked at registration, like the broker's settings, so the message names the key
+            // instead of surfacing later as a provider error from the first query.
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new OptionsValidationException(
+                    DatabaseOptions.Section,
+                    typeof(DatabaseOptions),
+                    [$"ConnectionStrings:{DatabaseOptions.ConnectionStringName} is required: the Npgsql connection string of this service's PostgreSQL database."]);
+
+            services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(connectionString));
+
+            services.AddScoped<TemplateImporter>();
+            services.AddHostedService<DatabaseStartup>();
 
             return services;
         }

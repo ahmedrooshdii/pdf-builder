@@ -60,12 +60,13 @@ internal static class PdfJobEndpoints
         if (!validation.IsValid)
             return Results.ValidationProblem(validation.ToDictionary());
 
-        var jobId = NewId.NextGuid();   // sequential GUID: index-friendly if this ever reaches a database
+        var jobId = NewId.NextGuid();   // sequential GUID: index-friendly in the jobs table
 
-        // Recorded before publishing, so a fast worker cannot finish the job and have its result
-        // overwritten by a Pending entry written afterwards.
-        await jobs.SaveAsync(PdfJob.Enqueued(jobId, command.TemplateKey, clock.GetUtcNow()), ct);
-
+        // Publish first, then save. With the bus outbox the publish only queues the message in the
+        // database context, and the save commits it together with the job, in one transaction. So a
+        // worker cannot start before the job exists (it would otherwise overwrite a Pending row that
+        // was written after it finished), and a failure of either leaves neither a job nobody will
+        // work on nor a message for a job nobody can poll.
         await bus.Publish<IGeneratePdfRequest>(new
         {
             CorrelationId = jobId,
@@ -73,6 +74,8 @@ internal static class PdfJobEndpoints
             JsonPayload = payload,
             request.PageSetup
         }, ct);
+
+        await jobs.SaveAsync(PdfJob.Enqueued(jobId, command.TemplateKey, clock.GetUtcNow()), ct);
 
         return Results.Accepted(
             uri: $"/api/pdf/jobs/{jobId}",

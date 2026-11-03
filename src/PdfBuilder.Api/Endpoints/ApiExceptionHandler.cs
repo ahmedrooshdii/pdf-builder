@@ -1,7 +1,9 @@
+using System.Globalization;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using PdfBuilder.Domain.Exceptions;
+using PdfBuilder.Infrastructure.Persistence;
 
 namespace PdfBuilder.Api.Endpoints;
 
@@ -28,11 +30,15 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
             TemplateReadOnlyException e => Problem(StatusCodes.Status409Conflict, "Template is read-only", e),
             StaleTemplateRevisionException e => Problem(StatusCodes.Status409Conflict, "Template changed", e),
             TemplateRenderException e => Problem(StatusCodes.Status422UnprocessableEntity, "Template does not render", e),
+            _ when StorageFailures.IsUnavailable(exception) => StorageUnavailable(),
             _ => null
         };
 
         if (problem is null)
             return false;
+
+        if (problem.Status == StatusCodes.Status503ServiceUnavailable)
+            httpContext.Response.Headers.RetryAfter = StorageRetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
 
         httpContext.Response.StatusCode = problem.Status!.Value;
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext
@@ -44,6 +50,21 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
     }
 
     /// <summary>The message is safe to show: domain exceptions are written for the caller.</summary>
+    /// <summary>How long a caller is told to wait before trying again when the database is unreachable.</summary>
+    private const int StorageRetryAfterSeconds = 5;
+
+    /// <summary>
+    /// The detail is fixed on purpose: the provider's own message can name the host, the database
+    /// or the user, and none of that belongs in a response.
+    /// </summary>
+    private static ProblemDetails StorageUnavailable() => new()
+    {
+        Status = StatusCodes.Status503ServiceUnavailable,
+        Title = "Storage unavailable",
+        Detail = "The service cannot reach its database right now. Nothing was accepted; try again in a few seconds.",
+        Extensions = { ["code"] = StorageFailures.UnavailableCode }
+    };
+
     private static ProblemDetails Problem(int status, string title, PdfBuilderException exception) => new()
     {
         Status = status,

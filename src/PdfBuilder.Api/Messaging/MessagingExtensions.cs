@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using MassTransit;
 using Microsoft.Extensions.Options;
+using PdfBuilder.Infrastructure.Persistence;
 
 namespace PdfBuilder.Api.Messaging;
 
@@ -33,6 +34,17 @@ public static class MessagingExtensions
             {
                 x.SetKebabCaseEndpointNameFormatter();
                 x.AddConsumer<GeneratePdfConsumer, GeneratePdfConsumerDefinition>();
+
+                // The bus outbox: a message published while handling an HTTP request is written to the
+                // database by the same SaveChanges that records the job, and is sent to RabbitMQ only
+                // after that commits. So a job is either both recorded and queued, or neither.
+                // The consumer side is deliberately left as it is (no consumer outbox or inbox): it
+                // already tolerates redelivery, and changing it would change the retry behaviour.
+                x.AddEntityFrameworkOutbox<PdfBuilderDbContext>(outbox =>
+                {
+                    outbox.UsePostgres();
+                    outbox.UseBusOutbox();
+                });
 
                 x.UsingRabbitMq((context, cfg) =>
                 {
