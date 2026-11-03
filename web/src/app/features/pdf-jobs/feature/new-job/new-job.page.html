@@ -79,6 +79,28 @@
     <app-field-errors id="data-errors" [field]="jobForm.data()" />
   </div>
 
+  <section class="grid max-w-2xl gap-4 rounded-lg border p-4" aria-labelledby="page-title">
+    <div class="flex items-start justify-between gap-4">
+      <div class="grid gap-1">
+        <label appLabel id="page-title" for="customPage">Change the page for this PDF</label>
+        <p class="text-xs text-muted-foreground">
+          Off, the PDF prints on the template's own paper and margins. On, change any of them for this one document.
+        </p>
+      </div>
+      <button appSwitch id="customPage" aria-label="Change the page for this PDF" [(checked)]="customPage"></button>
+    </div>
+
+    @if (customPage()) {
+      @if (pageOptions(); as options) {
+        <app-page-setup-form [value]="options" (valueChange)="pageOptions.set($event)" />
+      } @else if (templatePage.isLoading()) {
+        <p class="flex items-center gap-2 text-sm text-muted-foreground"><app-spinner class="size-3" />Loading the template's page setup…</p>
+      } @else {
+        <p class="text-sm text-muted-foreground">Choose a template first; its page setup is the starting point.</p>
+      }
+    }
+  </section>
+
   @if (formError(); as message) {
     <div role="alert" class="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
       <app-icon name="triangle-alert" class="mt-0.5" />

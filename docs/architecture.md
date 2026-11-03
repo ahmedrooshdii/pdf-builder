@@ -76,7 +76,7 @@ RabbitMQ consumer.
 | `TemplateNotFoundException` | no | `TEMPLATE_NOT_FOUND` | Answered immediately with a failure response. |
 | `TemplateRenderException` | no | `TEMPLATE_RENDER_FAILED` | Same. |
 | `ValidationException` (FluentValidation) | no | `VALIDATION_FAILED` | Same. |
-| `PdfRenderException` | yes | `RENDER_FAILED` | Bubbles out; MassTransit redelivers up to 3 times, then the `_error` queue and a `Fault<T>`. |
+| `PdfRenderException` | yes | `RENDER_FAILED` | Bubbles out; MassTransit redelivers up to 3 times. The last attempt marks the tracked job failed with this code, then the message goes to the `_error` queue and the requester gets a `Fault<T>`. |
 
 This used to be implicit — "is it a `DomainException`?" — which meant the retry policy depended on a
 class hierarchy nobody looking at the consumer could see. Now a new failure type has to answer the

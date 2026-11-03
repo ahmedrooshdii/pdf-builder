@@ -68,6 +68,35 @@ Content-Type: application/json
 }
 
 
+### Same invoice on Letter paper, landscape — page setup for this request only.
+# The template's margins are kept; only what is named here changes.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{
+  "templateKey": "invoice",
+  "pageSetup": { "format": "Letter", "landscape": true },
+  "data": {
+    "seller":   { "name": "Circle360", "address": "12 Nile Street, Cairo" },
+    "customer": { "name": "Walk-in Customer", "address": "-" },
+    "invoice":  { "number": "INV-0001", "issued_on": "2026-10-07", "due_on": "2026-10-07", "currency": "EGP" },
+    "items":    [ { "description": "One-off service", "quantity": 1, "unit_price": 500 } ],
+    "totals":   { "subtotal": 500, "total": 500 }
+  }
+}
+
+
+### A malformed page setup — expect 400 naming pageSetup.Width and pageSetup.Height.
+POST {{host}}/api/pdf/jobs
+Content-Type: application/json
+
+{
+  "templateKey": "invoice",
+  "pageSetup": { "width": "80" },
+  "data": { "a": 1 }
+}
+
+
 ### Empty item list — exercises the template's `else` branch.
 POST {{host}}/api/pdf/jobs
 Content-Type: application/json

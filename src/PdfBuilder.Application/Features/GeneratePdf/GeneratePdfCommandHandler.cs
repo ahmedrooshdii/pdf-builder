@@ -26,7 +26,8 @@ public sealed partial class GeneratePdfCommandHandler(
                        ?? throw new TemplateNotFoundException(request.TemplateKey);
 
         var html = await templateEngine.RenderAsync(template.Html, request.JsonPayload, cancellationToken);
-        var pdf = await renderer.RenderAsync(html, template.Options, cancellationToken);
+        var options = request.PageSetup?.ApplyTo(template.Options) ?? template.Options;
+        var pdf = await renderer.RenderAsync(html, options, cancellationToken);
         var stored = await storage.SaveAsync(pdf, "application/pdf", cancellationToken);
 
         var elapsedMs = (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;

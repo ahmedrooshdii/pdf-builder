@@ -54,9 +54,30 @@ public sealed class PlaywrightPdfRenderer : IPdfRenderer, IAsyncDisposable
             await page.SetContentAsync(html, new PageSetContentOptions { WaitUntil = WaitUntilState.Load });
             await page.EmulateMediaAsync(new PageEmulateMediaOptions { Media = Media.Print });
 
+            var pdfOptions = ToPagePdfOptions(renderOptions);
+            if (IsAutoHeight(renderOptions))
+            {
+                pdfOptions.Height = await MeasureContentHeightAsync(page, renderOptions);
+
+                // Chromium takes the orientation from a template's @page size even when told to
+                // prefer the given paper, and turns a receipt wider than it is tall on its side.
+                // A rule of our own, after the template's, makes the CSS agree with the paper.
+                // Not AddStyleTagAsync: that waits for the style's load event, which never fires
+                // with JavaScript off, and hangs the render.
+                await page.EvaluateAsync(
+                    """
+                    css => {
+                        const style = document.createElement('style');
+                        style.textContent = css;
+                        (document.head ?? document.documentElement).appendChild(style);
+                    }
+                    """,
+                    $"@page {{ size: {pdfOptions.Width} {pdfOptions.Height} !important; }}");
+            }
+
             // Playwright takes no CancellationToken. WaitAsync releases the caller promptly, and the
             // context teardown in `finally` aborts the work the browser is still doing.
-            return await page.PdfAsync(ToPagePdfOptions(renderOptions)).WaitAsync(cancellationToken);
+            return await page.PdfAsync(pdfOptions).WaitAsync(cancellationToken);
         }
         catch (PlaywrightException ex)   // covers Playwright's own TimeoutException
         {
@@ -174,20 +195,62 @@ public sealed class PlaywrightPdfRenderer : IPdfRenderer, IAsyncDisposable
         && (uri.Scheme is "data" or "about" or "blob"
             || _options.AllowedHosts.Contains(uri.Host, StringComparer.OrdinalIgnoreCase));
 
-    private static PagePdfOptions ToPagePdfOptions(PdfRenderOptions options) => new()
+    /// <remarks>
+    /// Playwright lets <c>Format</c> win over <c>Width</c> and <c>Height</c>, so a custom size is
+    /// only honoured when the format is left out. An <c>auto</c> height is left unset here: it is
+    /// measured once the content is laid out (see <see cref="MeasureContentHeightAsync"/>).
+    /// </remarks>
+    internal static PagePdfOptions ToPagePdfOptions(PdfRenderOptions options)
     {
-        Format = options.Format,
-        Landscape = options.Landscape,
-        PrintBackground = options.PrintBackground,
-        PreferCSSPageSize = options.PreferCssPageSize,
-        Margin = new Margin
+        var autoHeight = IsAutoHeight(options);
+
+        return new PagePdfOptions
         {
-            Top = options.Margins.Top,
-            Right = options.Margins.Right,
-            Bottom = options.Margins.Bottom,
-            Left = options.Margins.Left
-        }
-    };
+            Format = options is { Width: not null, Height: not null } ? null : options.Format,
+            Width = options.Height is null ? null : options.Width,
+            Height = options.Width is null || autoHeight ? null : options.Height,
+            // Turning the page would swap the measured height onto the width; and an @page size in
+            // the template would replace the measurement altogether. Neither makes sense for a roll.
+            Landscape = !autoHeight && options.Landscape,
+            PrintBackground = options.PrintBackground,
+            PreferCSSPageSize = !autoHeight && options.PreferCssPageSize,
+            Margin = new Margin
+            {
+                Top = options.Margins.Top,
+                Right = options.Margins.Right,
+                Bottom = options.Margins.Bottom,
+                Left = options.Margins.Left
+            }
+        };
+    }
+
+    private static bool IsAutoHeight(PdfRenderOptions options) => options.Width is not null && PageSize.IsAuto(options.Height);
+
+    /// <summary>
+    /// How tall the page must be to hold the whole document on one page. The viewport is narrowed to
+    /// the printable width first, so text wraps where it will on paper, and the margins are added
+    /// back on top of the measured content.
+    /// </summary>
+    /// <remarks>
+    /// Rounded up, plus a pixel: Chromium snaps the page to device pixels, and a page a fraction too
+    /// short spills its last line onto a second, nearly empty one. Capped at
+    /// <see cref="PageSize.MaxPixels"/>; anything longer carries on across pages.
+    /// </remarks>
+    private static async Task<string> MeasureContentHeightAsync(IPage page, PdfRenderOptions options)
+    {
+        var margins = options.Margins;
+        var printableWidth = PageSize.ToPixels(options.Width!)
+                             - PageSize.ToPixels(margins.Left) - PageSize.ToPixels(margins.Right);
+
+        // Height 1, so the viewport never props up a document shorter than itself.
+        await page.SetViewportSizeAsync((int)Math.Max(1, Math.Floor(printableWidth)), 1);
+
+        var content = await page.EvaluateAsync<double>(
+            "() => Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)");
+
+        var height = Math.Ceiling(content) + 1 + PageSize.ToPixels(margins.Top) + PageSize.ToPixels(margins.Bottom);
+        return FormattableString.Invariant($"{Math.Min(height, PageSize.MaxPixels):0}px");
+    }
 
     private async Task CloseQuietlyAsync(IBrowserContext? context)
     {

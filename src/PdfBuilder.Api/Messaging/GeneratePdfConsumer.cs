@@ -34,7 +34,7 @@ public sealed class GeneratePdfConsumer(
         try
         {
             var result = await sender.Send(
-                new GeneratePdfCommand(message.TemplateKey, message.JsonPayload), ct);
+                new GeneratePdfCommand(message.TemplateKey, message.JsonPayload, message.PageSetup.ToDomain()), ct);
 
             await CompleteAsync(context, job => job.Succeed(
                 result.FileId, result.FileUrl, result.SizeBytes, clock.GetUtcNow()));
@@ -72,9 +72,18 @@ public sealed class GeneratePdfConsumer(
             });
         }
 
-        // Everything else - a browser crash, a timeout, a disk hiccup - is transient and is left to
-        // bubble. MassTransit redelivers it per GeneratePdfConsumerDefinition, and once the retries
-        // are spent the message goes to the _error queue and the requester receives a Fault<T>.
+        catch (Exception ex) when (context.GetRetryAttempt() >= GeneratePdfConsumerDefinition.RetryLimit)
+        {
+            // The last attempt of a transient failure. Close the tracked job so an HTTP caller
+            // polling it sees the failure instead of Pending forever, then rethrow so the message
+            // still goes to _error and a bus requester still receives its Fault<T>.
+            var (errorCode, errorMessage) = Describe(ex);
+            await CompleteAsync(context, job => job.Fail(errorCode, errorMessage, clock.GetUtcNow()));
+            throw;
+        }
+
+        // Earlier attempts of a transient failure - a browser crash, a timeout, a disk hiccup - are
+        // left to bubble, and MassTransit redelivers them per GeneratePdfConsumerDefinition.
     }
 
     /// <summary>

@@ -15,7 +15,11 @@ public interface IGeneratePdfResponse
     /// <summary>Opaque id of the stored file. Null when <see cref="IsSuccess"/> is false.</summary>
     string? FileId { get; }
 
-    /// <summary>Absolute URL the requester downloads the PDF from. Null when <see cref="IsSuccess"/> is false.</summary>
+    /// <summary>
+    /// Absolute URL the requester downloads the PDF from with a plain GET. Not signed and does not
+    /// expire; whether it needs credentials depends on how the service is deployed. Null when
+    /// <see cref="IsSuccess"/> is false.
+    /// </summary>
     string? FileUrl { get; }
 
     /// <summary>Size of the stored PDF in bytes. Null when <see cref="IsSuccess"/> is false.</summary>

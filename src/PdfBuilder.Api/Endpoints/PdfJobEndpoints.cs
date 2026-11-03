@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentValidation;
 using MassTransit;
+using PdfBuilder.Api.Messaging;
 using PdfBuilder.Application.Abstractions;
 using PdfBuilder.Application.Features.GeneratePdf;
 using PdfBuilder.Contracts;
@@ -54,7 +55,7 @@ internal static class PdfJobEndpoints
 
         // Reuse the command's validator rather than restating its rules here, so an obviously bad
         // request is refused with a 400 instead of being queued only to fail a second later.
-        var command = new GeneratePdfCommand(request.TemplateKey ?? string.Empty, payload);
+        var command = new GeneratePdfCommand(request.TemplateKey ?? string.Empty, payload, request.PageSetup.ToDomain());
         var validation = await validator.ValidateAsync(command, ct);
         if (!validation.IsValid)
             return Results.ValidationProblem(validation.ToDictionary());
@@ -69,7 +70,8 @@ internal static class PdfJobEndpoints
         {
             CorrelationId = jobId,
             command.TemplateKey,
-            JsonPayload = payload
+            JsonPayload = payload,
+            request.PageSetup
         }, ct);
 
         return Results.Accepted(
@@ -90,7 +92,8 @@ internal static class PdfJobEndpoints
 /// <summary>Body of <c>POST /api/pdf/jobs</c>.</summary>
 /// <param name="TemplateKey">Id of a registered template, for example <c>invoice</c>.</param>
 /// <param name="Data">A JSON object bound to the template.</param>
-internal sealed record GeneratePdfRequest(string? TemplateKey, JsonElement Data);
+/// <param name="PageSetup">Optional: paper size, orientation or margins for this document only.</param>
+internal sealed record GeneratePdfRequest(string? TemplateKey, JsonElement Data, PdfPageSetup? PageSetup = null);
 
 internal sealed record JobAcceptedResponse(Guid JobId, string StatusUrl);
 

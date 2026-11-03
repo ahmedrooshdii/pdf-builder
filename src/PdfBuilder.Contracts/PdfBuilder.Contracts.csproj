@@ -18,18 +18,26 @@
     <IsPackable>true</IsPackable>
     <Description>Message contracts and error codes for requesting PDFs from the PDF Builder service over MassTransit.</Description>
     <PackageTags>pdf;masstransit;contracts;messaging</PackageTags>
+    <Authors>Ahmed Roshdi</Authors>
+    <Company>Ahmed Roshdi</Company>
+    <Copyright>Copyright (c) 2026 Ahmed Roshdi</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/ahmedrooshdii/pdf-builder</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/ahmedrooshdii/pdf-builder/blob/master/docs/message-contracts.md</PackageProjectUrl>
+    <PackageReleaseNotes>https://github.com/ahmedrooshdii/pdf-builder/blob/master/CHANGELOG.md</PackageReleaseNotes>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <!-- Overridden by CI from the release tag; this is what a local `dotnet pack` produces. -->
-    <Version>1.0.0-local</Version>
+    <Version>1.1.0-local</Version>
     <!--
-      Fails the pack if the public surface breaks compared to the last release. Set
-      PackageValidationBaselineVersion to the latest published version once one exists.
+      Fails the pack if the public surface breaks compared to the last release. Bump
+      PackageValidationBaselineVersion after each release.
     -->
     <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
   <ItemGroup>
