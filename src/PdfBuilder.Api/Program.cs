@@ -1,5 +1,7 @@
+using Blocks.ServiceDefaults;
 using PdfBuilder.Api.Endpoints;
 using PdfBuilder.Api.Messaging;
+using PdfBuilder.Api.OpenApi;
 using PdfBuilder.Application;
 using PdfBuilder.Infrastructure;
 using Scalar.AspNetCore;
@@ -15,7 +17,10 @@ builder.Services
     .AddInfrastructure(builder.Configuration)
     .AddMessaging(builder.Configuration)
     .AddProblemDetails()
-    .AddOpenApi();
+    .AddOpenApi(options => options.AddDocumentTransformer<ApiKeySecurityTransformer>());
+
+// Every endpoint needs a key unless it says otherwise below. There is no setting that turns this off.
+builder.Services.AddBlocksAuthentication(PdfPermissions.BlockCode, PdfPermissions.All);
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -23,24 +28,29 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseBlocksClientLogScope();
 
 // Docs are open in non-production only. Put them behind authentication before enabling in production.
 if (!app.Environment.IsProduction())
 {
-    app.MapOpenApi();                        // /openapi/v1.json
+    app.MapOpenApi().AllowAnonymous();                          // /openapi/v1.json
     app.MapScalarApiReference(options => options
         .WithTitle("PDF Builder API")
-        .WithTheme(ScalarTheme.DeepSpace));  // /scalar/v1
+        .WithTheme(ScalarTheme.DeepSpace)).AllowAnonymous();   // /scalar/v1
 }
 
 // Liveness answers "is the process up"; restarting on a failed dependency check would be wrong,
 // so dependency checks belong to readiness, which only removes the instance from the load balancer.
-app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
-app.MapHealthChecks("/health/ready");
+// Both stay open: load balancers and orchestrators have no key.
+app.MapHealthChecks("/health/live", new() { Predicate = _ => false }).AllowAnonymous();
+app.MapHealthChecks("/health/ready").AllowAnonymous();
 
 app.MapPdfJobEndpoints();
 app.MapFileEndpoints();
 app.MapTemplateEndpoints();
+app.MapBlocksAdmin();
 
 app.Run();
 

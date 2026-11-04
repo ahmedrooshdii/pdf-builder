@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The authentication stud shared by every block: the X-Api-Key handler, the permission policies,
+    the client and key management endpoints and ICurrentClient. It knows nothing about any block,
+    and an architecture test keeps it from referencing one (constitution Principle IX).
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Blocks.ServiceDefaults.Tests" />
+  </ItemGroup>
+
+</Project>

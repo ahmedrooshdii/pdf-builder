@@ -42,6 +42,7 @@ itself from [src/PdfBuilder.Api/Dockerfile](../../src/PdfBuilder.Api/Dockerfile)
    | Secret | `RabbitMq__ConnectionString` | The `amqps://` URI from CloudAMQP |
    | Secret | `ConnectionStrings__Database` | The Npgsql connection string of a hosted PostgreSQL, for example `Host=<host>;Database=<db>;Username=<user>;Password=<password>;SSL Mode=Require`. Hosted databases require TLS. |
    | Variable | `Storage__PublicBaseUrl` | `https://<owner>-<space-name>.hf.space` |
+   | Secret | `Blocks__Admin__KeyHash` | The hash printed by `dotnet run --project tools/Blocks.Cli -- admin-key`, run on your own machine. Keep the key itself in your password manager: it manages clients and API keys, and only its hash goes in the Space. |
 
    The URL is shown under *⋯ → Embed this Space → Direct URL*. Underscores and capitals in the
    names are converted, so copy it from there instead of guessing it.
@@ -65,7 +66,9 @@ itself from [src/PdfBuilder.Api/Dockerfile](../../src/PdfBuilder.Api/Dockerfile)
 
 - **The Space stops at start-up with `ConnectionStrings:Database is required`.** The secret above is
   missing or empty. **With `The database schema is out of date`** the schema could not be applied:
-  check the database user may create tables.
+  check the database user may create tables. **With `Blocks:Admin:KeyHash is required`** the admin
+  key hash secret is missing; with `must be 64 lowercase hexadecimal characters`, the key itself was
+  pasted instead of its hash.
 - **The job says `/health/ready` did not answer 200.** The Space started, but a dependency check is
   failing, RabbitMQ or the database. Check the container logs for the connection error. If
   connections to CloudAMQP time out, try its non-TLS port: replace `amqps://` with `amqp://` in the

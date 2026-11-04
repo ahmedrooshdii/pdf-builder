@@ -376,7 +376,7 @@ of the backend or frontend document.
 
 | Milestone | Features | Outcome |
 | --- | --- | --- |
-| **M1: Safe to expose** | 001, 002, 003, 004 | Nothing is open; each client sees only its own data. |
+| **M1: Safe to expose** | 001, 002, 003, 004 | Nothing is open; each client sees only its own data. Ships so that **002 is never released without 004**: 002 refuses every caller without a key, including this repository's console, and has no off switch (decided in `specs/002-clients-and-api-keys`). |
 | **M2: Installable at a company** | 005, 012, 013, 014 | The PDF block runs on a clean server, branded, from the kit alone. |
 | **M3: Pleasant to integrate** | 006, 007, 009 | A product integrates in under an hour with no polling or retry code. |
 | **M4: Ready for a second block** | 008, 010, 011 | Email block can start from `blocks-platform`. |

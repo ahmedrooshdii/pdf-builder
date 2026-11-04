@@ -7,6 +7,9 @@ WORKDIR /src
 
 # Project files first, so the restore layer stays cached until dependencies actually change.
 COPY Directory.Build.props Directory.Packages.props PdfBuilder.slnx ./
+COPY src/Blocks.ServiceDefaults/Blocks.ServiceDefaults.csproj       src/Blocks.ServiceDefaults/
+COPY src/Blocks.ServiceDefaults.EntityFramework/Blocks.ServiceDefaults.EntityFramework.csproj \
+                                                                    src/Blocks.ServiceDefaults.EntityFramework/
 COPY src/PdfBuilder.Contracts/PdfBuilder.Contracts.csproj           src/PdfBuilder.Contracts/
 COPY src/PdfBuilder.Domain/PdfBuilder.Domain.csproj                 src/PdfBuilder.Domain/
 COPY src/PdfBuilder.Application/PdfBuilder.Application.csproj       src/PdfBuilder.Application/

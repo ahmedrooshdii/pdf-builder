@@ -10,6 +10,7 @@
     RabbitMQ consumer. See docs/architecture.md for when to split those into two deployables.
   -->
   <ItemGroup>
+    <ProjectReference Include="..\Blocks.ServiceDefaults\Blocks.ServiceDefaults.csproj" />
     <ProjectReference Include="..\PdfBuilder.Application\PdfBuilder.Application.csproj" />
     <ProjectReference Include="..\PdfBuilder.Contracts\PdfBuilder.Contracts.csproj" />
     <ProjectReference Include="..\PdfBuilder.Infrastructure\PdfBuilder.Infrastructure.csproj" />

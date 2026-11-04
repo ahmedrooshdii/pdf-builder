@@ -54,6 +54,17 @@ dotnet blocks key create ecommerce --block pdf --name production --scopes pdf:ge
 
 The CLI talks to the block's admin API with the admin key; it never touches a database directly.
 
+**Built so far** (feature 002, `specs/002-clients-and-api-keys`): one scheme, `ApiKey`, serves both
+key kinds, telling them apart by prefix; `AdminKey` and `ConsoleSession` as separate schemes behind
+the `Blocks` policy scheme arrive with the console sign-in (feature 004), without changing the key
+handler. The code lives in `src/Blocks.ServiceDefaults` (handler, permission policies with a fallback
+policy that closes every endpoint not marked anonymous, `/api/admin/clients…`, `ICurrentClient`, the
+`ClientId`/`KeyId` log scope) and `src/Blocks.ServiceDefaults.EntityFramework` (`clients`,
+`api_keys`, the store), referenced by PDF Builder until feature 011 moves them to `blocks-platform`.
+`tools/Blocks.Cli` has only `admin-key`; client and key commands wait for 011, and until then the
+management API is called directly (`samples/admin.http`). The admin lists return the list envelope
+with `items` only, and the admin `POST`s take no `Idempotency-Key`, until those studs exist.
+
 #### Scopes
 
 | Scope | Allows |
@@ -127,8 +138,12 @@ Stud codes, shared by every block:
 | 403 | `AUTH_SCOPE_MISSING` | Valid key without the scope this endpoint needs. |
 | 403 | `CLIENT_DISABLED` | The client is disabled. |
 | 404 | (block code or none) | Not found **or belongs to another client**. Never 403 for that. |
+| 404 | `CLIENT_NOT_FOUND` | Management API: no client has this id. |
+| 404 | `KEY_NOT_FOUND` | Management API: the client has no key with this id. |
+| 409 | `CLIENT_ID_TAKEN` | Management API: client ids are permanent and never reused. |
 | 422 | `IDEMPOTENCY_KEY_REUSED` | Same `Idempotency-Key`, different body. |
 | 429 | `RATE_LIMITED` | Over the client's limit. Carries `Retry-After`. |
+| 503 | `STORAGE_UNAVAILABLE` | The block's database is unreachable, including while checking a key. Carries `Retry-After`. Never answered as `AUTH_INVALID_KEY`. |
 
 A block's own codes (`TEMPLATE_NOT_FOUND`, `TEMPLATE_KEY_TAKEN`, …) sit alongside these. Codes are
 public API: new ones may be added, existing ones never change meaning.
@@ -255,7 +270,7 @@ Studs use the `Blocks` section, so every block is configured the same way:
 | Key | Default | Notes |
 | --- | --- | --- |
 | `ConnectionStrings:Database` | – | Required. The block's own database. |
-| `Blocks:Admin:KeyHash` | – | Required. From `dotnet blocks admin-key`. |
+| `Blocks:Admin:KeyHash` | – | Required. Lowercase hex SHA-256 of the admin key, from `dotnet blocks admin-key` (today `dotnet run --project tools/Blocks.Cli -- admin-key`). |
 | `Blocks:Files:SigningKey` | – | Required. 32+ random bytes, base64. |
 | `Blocks:Files:UrlLifetime` | `01:00:00` | |
 | `Blocks:Files:RetentionDays` | `30` | |
@@ -283,10 +298,11 @@ through the `PdfBuilder.Contracts` package version.
 
 Built in feature 001 (`specs/001-persistent-storage`), before clients exist:
 
-- `PdfBuilderDbContext` in `PdfBuilder.Infrastructure/Persistence/`. It does **not** yet derive from
-  the stud `BlocksDbContext` (clients, API keys, webhooks, Data Protection keys, the client query
-  filter): that package is extracted from this context by feature 002, when a second set of tables
-  exists to extract it from.
+- `PdfBuilderDbContext` in `PdfBuilder.Infrastructure/Persistence/`. It does **not** derive from a
+  stud `BlocksDbContext`. Feature 002 added the stud's first tables (`clients`, `api_keys`) as
+  `modelBuilder.AddBlocksClients()` from `Blocks.ServiceDefaults.EntityFramework` instead, so a block
+  keeps its own context; webhooks, Data Protection keys and the client query filter join the same
+  way in their features.
 - Records `PdfJobRecord`, `AuthoredTemplateRecord` and `TemplateImportRecord`, converted to and from
   the domain types, which stay free of EF. There is no `FileEntity`: generated files stay behind
   `IFileStorage` until feature 005. Template content is stored as `jsonb` using the property names the

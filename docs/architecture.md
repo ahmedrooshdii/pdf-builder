@@ -14,8 +14,9 @@ HTTP request thread.
 ```
                  ┌──────────────────────────── PdfBuilder.Api (one process) ────────────────────────────┐
                  │                                                                                      │
- HTTP caller ──► │  POST /api/pdf/jobs                                                                  │
+ HTTP caller ──► │  POST /api/pdf/jobs   (X-Api-Key)                                                    │
                  │       │                                                                              │
+                 │       ├─ authenticate the key, check pdf:generate  ──► 401 / 403 / 503, nothing done │
                  │       ├─ validate (the command's own validator, reused)  ──► 400 on bad input        │
                  │       ├─ publish IGeneratePdfRequest ─┐                                               │
                  │       ├─ record job as Pending ───────┴─► PostgreSQL (one transaction)                │
@@ -34,8 +35,8 @@ HTTP request thread.
                  │                                  ▼                                      ▼            │
                  │                          IPdfJobStore (poll)              IGeneratePdfResponse (bus)  │
                  │                                                                                      │
- HTTP caller ──► │  GET /api/pdf/jobs/{id}  ──► job state                                                │
- HTTP caller ──► │  GET /files/{fileId}     ──► the PDF bytes                                            │
+ HTTP caller ──► │  GET /api/pdf/jobs/{id}  ──► job state       (X-Api-Key, pdf:generate)               │
+ HTTP caller ──► │  GET /files/{fileId}     ──► the PDF bytes   (no key until file links are signed)    │
                  └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -65,6 +66,33 @@ storage, is a change inside one folder.
 
 **Api** is the composition root and the only executable. It hosts both the HTTP endpoints and the
 RabbitMQ consumer.
+
+**The shared `Blocks.*` packages** sit beside these and serve every block, so no `Blocks.*` assembly
+may reference a `PdfBuilder.*` one (an architecture test fails the build if it does).
+`Blocks.ServiceDefaults`, referenced by Api, is the authentication stud: the `X-Api-Key` handler, the
+permission policies, the management endpoints under `/api/admin/clients` and `ICurrentClient`.
+`Blocks.ServiceDefaults.EntityFramework`, referenced by Infrastructure, adds the `clients` and
+`api_keys` tables to `PdfBuilderDbContext` and the store over them. They live in this repository
+until they move to their own (feature 011).
+
+## Authentication
+
+Every endpoint needs a key unless it is marked anonymous: a fallback authorization policy closes
+anything that says nothing, so an endpoint added later cannot be open by accident. Only the two
+health endpoints, the file download and (outside production) the API docs are anonymous. Each
+operation then demands one permission (`pdf:generate`, `pdf:templates:read` or
+`pdf:templates:write`); the admin key's `admin` authority satisfies all of them and is the only
+thing that reaches `/api/admin`.
+
+A key's secret is never stored, only its SHA-256, compared in constant time. What an instance reads
+about a key is cached for 60 seconds, so most requests cost no database read and a revocation reaches
+every instance within a minute. Failures are classified in the handler and answered by the stud
+(`AUTH_REQUIRED`, `AUTH_INVALID_KEY`, `CLIENT_DISABLED`, `AUTH_SCOPE_MISSING`, or
+`STORAGE_UNAVAILABLE` when the key cannot be checked). An outage is never reported as a bad key.
+
+Code below the handler reads the caller only through `ICurrentClient` (constitution Principle VI).
+In this release that is the log scope; the data is not yet separated per client (feature 003).
+The message bus is unchanged: publishers are trusted through their broker credentials.
 
 ## Decisions worth knowing
 

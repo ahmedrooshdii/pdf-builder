@@ -5,6 +5,7 @@
     references Playwright, Scriban or the file system.
   -->
   <ItemGroup>
+    <ProjectReference Include="..\Blocks.ServiceDefaults.EntityFramework\Blocks.ServiceDefaults.EntityFramework.csproj" />
     <ProjectReference Include="..\PdfBuilder.Application\PdfBuilder.Application.csproj" />
   </ItemGroup>
 

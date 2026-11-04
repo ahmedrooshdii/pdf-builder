@@ -16,6 +16,10 @@
 .PARAMETER BaseUrl
     Where the API is listening. Defaults to the local `dotnet run` address.
 
+.PARAMETER ApiKey
+    The API key to send in X-Api-Key: a client key with the pdf:generate permission (issue one with
+    samples/admin.http), or the admin key. Defaults to the PDFBUILDER_API_KEY environment variable.
+
 .PARAMETER OutFile
     Where to save the PDF. Defaults to the payload's name with a .pdf extension, in the temp folder.
 
@@ -23,6 +27,7 @@
     Open the PDF in the default viewer once it is downloaded.
 
 .EXAMPLE
+    $env:PDFBUILDER_API_KEY = 'pdf_…'
     ./samples/Invoke-PdfJob.ps1 -PayloadPath templates/invoice.sample.json -Open
 
 .EXAMPLE
@@ -35,6 +40,7 @@ param(
 
     [string] $TemplateKey = 'invoice',
     [string] $BaseUrl = 'http://localhost:5052',
+    [string] $ApiKey = $env:PDFBUILDER_API_KEY,
     [string] $OutFile,
     [int]    $TimeoutSeconds = 120,
     [switch] $Open
@@ -43,6 +49,10 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not (Test-Path $PayloadPath)) { throw "Payload not found: $PayloadPath" }
+if (-not $ApiKey) { throw 'No API key: pass -ApiKey or set PDFBUILDER_API_KEY (issue one with samples/admin.http).' }
+
+# Every call to /api needs the key. File downloads do not, until file links become signed.
+$headers = @{ 'X-Api-Key' = $ApiKey }
 
 $BaseUrl = $BaseUrl.TrimEnd('/')
 if (-not $OutFile) {
@@ -57,7 +67,7 @@ $body = @{ templateKey = $TemplateKey; data = $data } | ConvertTo-Json -Depth 20
 Write-Host "POST $BaseUrl/api/pdf/jobs  (template: $TemplateKey)" -ForegroundColor Cyan
 
 try {
-    $accepted = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/pdf/jobs" `
+    $accepted = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/pdf/jobs" -Headers $headers `
         -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body))
 }
 catch {
@@ -86,7 +96,7 @@ Write-Host "  jobId: $($accepted.jobId)" -ForegroundColor DarkGray
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 do {
     Start-Sleep -Milliseconds 400
-    $job = Invoke-RestMethod -Method Get -Uri "$BaseUrl/api/pdf/jobs/$($accepted.jobId)"
+    $job = Invoke-RestMethod -Method Get -Uri "$BaseUrl/api/pdf/jobs/$($accepted.jobId)" -Headers $headers
 
     if ((Get-Date) -gt $deadline) {
         throw "Job $($accepted.jobId) was still '$($job.status)' after $TimeoutSeconds seconds. Is a worker consuming the queue?"

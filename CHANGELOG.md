@@ -36,6 +36,34 @@ matching.
 - A job submitted over HTTP whose render failed on every retry stayed `Pending` forever. The last
   attempt now marks it `Failed` with `RENDER_FAILED`. Bus requesters still receive a `Fault<T>`.
 
+### Changed (service): API keys — breaking for callers without a key
+
+The package and the messages are unchanged, and the contracts version does not change for this.
+Over HTTP, every `/api` call now needs a key.
+
+- **Every call to `/api` needs an `X-Api-Key`.** Products are registered as clients by the operator
+  and given named keys with only the permissions they need (`pdf:generate`, `pdf:templates:read`,
+  `pdf:templates:write`), optionally expiring. A key is shown once and stored only as a hash.
+  Accepted responses are exactly what they were; refusals use problem details with a stable code:
+  `401 AUTH_REQUIRED`, `401 AUTH_INVALID_KEY` (identical for unknown, revoked and expired keys),
+  `403 AUTH_SCOPE_MISSING`, `403 CLIENT_DISABLED`, and `503 STORAGE_UNAVAILABLE` when a key cannot be
+  checked.
+- **Management endpoints** under `/api/admin/clients` register and disable clients and issue, list and
+  revoke keys, with the admin key. Revoking a key or disabling a client takes effect on every
+  instance within a minute; the key list shows when each key was last used.
+- **Open as before:** `/health/live`, `/health/ready`, `GET /files/{fileId}`, and the API docs outside
+  production. Messages on the bus carry no key and are not affected.
+- `tools/Blocks.Cli admin-key` generates the admin key and its hash.
+
+#### Upgrading
+
+- **`Blocks:Admin:KeyHash` is required.** The service does not start without it, naming the setting.
+  On the VM it is `ADMIN_KEY_HASH` in `.env`; on the Space, the secret `Blocks__Admin__KeyHash`.
+- **Callers that send no key are refused from this release**, including the web console until its
+  sign-in (released together with this). There is no setting that turns authentication off. Issue
+  keys to existing products before upgrading; see
+  [docs/operations.md](docs/operations.md#upgrading-to-api-keys).
+
 ### Changed (service)
 
 None of this touches the package: the HTTP responses, the messages and the error codes are exactly

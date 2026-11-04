@@ -97,9 +97,25 @@ cat > /opt/pdf-builder/.env <<EOF
 RABBITMQ_CONNECTION_STRING=amqps://user:pass@host.rmq.cloudamqp.com/vhost
 PUBLIC_BASE_URL=https://pdf.example.com
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
+ADMIN_KEY_HASH=<the hash printed by admin-key, see below>
 EOF
 chmod 600 /opt/pdf-builder/.env
 ```
+
+`ADMIN_KEY_HASH` is the hash of the operator's admin key, which manages clients and API keys. Every
+call to `/api` needs a key, and there is no setting that turns that off. Generate the admin key on
+**your own machine**, not on the VM:
+
+```bash
+dotnet run --project tools/Blocks.Cli -- admin-key
+```
+
+It prints the key once and the hash. Keep the key in your password manager; only the hash goes in
+`.env`, so the VM never holds anything that can be used to call the API. The deploy fails fast,
+naming the variable, if it is missing. To replace the key, generate a new one, change the hash and
+`docker compose up -d`: the old key stops working at once. Then register clients and issue their
+keys with the calls in [samples/admin.http](../samples/admin.http), **before** pointing any product
+at this version: a product that sends no key is refused.
 
 `PUBLIC_BASE_URL` must be the address **callers** reach, not the VM's. It is what every `fileUrl`
 is built from, so getting it wrong hands out dead links and nothing fails until someone clicks one.

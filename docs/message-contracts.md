@@ -10,6 +10,11 @@ Migrating from the pre-release contracts (`TemplateId`)? See [CHANGELOG.md](../C
 > RabbitMQ exchange name. Renaming or moving them stops producers and consumers matching, silently.
 > Treat these two files as published API.
 
+> **HTTP needs a key; the bus does not.** Calls to `/api` carry an `X-Api-Key` issued by the operator
+> ([operations.md](operations.md#api-keys)). Messages published to RabbitMQ are unchanged: they carry
+> no key, and publishers are trusted through their broker credentials. Nothing in this package
+> changed for API keys.
+
 ## Getting the package
 
 Published to nuget.org as `PdfBuilder.Contracts` (targets `netstandard2.0` and `net10.0`). No feed

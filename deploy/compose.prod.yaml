@@ -55,6 +55,9 @@ services:
       RabbitMq__ConnectionString: ${RABBITMQ_CONNECTION_STRING:?set RABBITMQ_CONNECTION_STRING in .env}
       Storage__PublicBaseUrl: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL in .env}
       ConnectionStrings__Database: Host=postgres;Database=pdf_builder;Username=pdf_builder;Password=${POSTGRES_PASSWORD}
+      # Hash of the admin key, from `dotnet run --project tools/Blocks.Cli -- admin-key`. The key itself
+      # never goes on the VM.
+      Blocks__Admin__KeyHash: ${ADMIN_KEY_HASH:?set ADMIN_KEY_HASH in .env}
 
       Storage__RootPath: /data/files
       TemplateStore__RootPath: /app/Templates

@@ -49,6 +49,11 @@ services:
       RabbitMq__Host: rabbitmq
       ConnectionStrings__Database: Host=postgres;Database=pdf_builder;Username=pdf_builder;Password=pdf_builder
       Storage__PublicBaseUrl: http://localhost:8080
+      # LOCAL ONLY. The hash of this published admin key, so the stack starts without setup:
+      #   adm_lPQ25ykvuTW7HdOJLaJzfqnJsT4cKQfwwR5pgq4o
+      # Anyone can read it here, so never use it anywhere else. For a real deployment, generate your
+      # own with `dotnet run --project tools/Blocks.Cli -- admin-key`.
+      Blocks__Admin__KeyHash: 19b2a63852aac00e2726b5c674e18caea07ca8351be2846e160027204facc5fa
     volumes:
       - pdf-data:/data
       # Edit a template on the host and the next render picks it up, no rebuild needed.

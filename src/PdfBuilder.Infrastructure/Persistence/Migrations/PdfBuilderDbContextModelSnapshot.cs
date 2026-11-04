@@ -22,6 +22,98 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Blocks.ServiceDefaults.EntityFramework.ApiKeyRecord", b =>
+                {
+                    b.Property<string>("KeyId")
+                        .HasMaxLength(8)
+                        .HasColumnType("character(8)")
+                        .HasColumnName("key_id")
+                        .IsFixedLength();
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.PrimitiveCollection<string[]>("Scopes")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("scopes");
+
+                    b.Property<byte[]>("SecretHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("secret_hash");
+
+                    b.HasKey("KeyId")
+                        .HasName("pk_api_keys");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("ix_api_keys_client_id");
+
+                    b.ToTable("api_keys", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_api_keys_key_id_format", "key_id ~ '^[a-z0-9]{8}$'");
+
+                            t.HasCheckConstraint("ck_api_keys_scopes_not_empty", "cardinality(scopes) > 0");
+
+                            t.HasCheckConstraint("ck_api_keys_secret_hash_length", "octet_length(secret_hash) = 32");
+                        });
+                });
+
+            modelBuilder.Entity("Blocks.ServiceDefaults.EntityFramework.ClientRecord", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DisabledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("disabled_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_clients");
+
+                    b.ToTable("clients", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_clients_id_format", "id ~ '^[a-z][a-z0-9-]{0,39}$'");
+                        });
+                });
+
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
                 {
                     b.Property<long>("Id")
@@ -380,6 +472,16 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_template_imports_single_row", "id = 1");
                         });
+                });
+
+            modelBuilder.Entity("Blocks.ServiceDefaults.EntityFramework.ApiKeyRecord", b =>
+                {
+                    b.HasOne("Blocks.ServiceDefaults.EntityFramework.ClientRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_keys_clients_client_id");
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
