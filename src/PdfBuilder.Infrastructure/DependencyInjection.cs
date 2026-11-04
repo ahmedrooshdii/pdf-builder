@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,6 +70,7 @@ public static class DependencyInjection
                     [$"ConnectionStrings:{DatabaseOptions.ConnectionStringName} is required: the Npgsql connection string of this service's PostgreSQL database."]);
 
             services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(connectionString));
+            services.AddBlocksClientStore<PdfBuilderDbContext>();
 
             services.AddScoped<TemplateImporter>();
             services.AddHostedService<DatabaseStartup>();

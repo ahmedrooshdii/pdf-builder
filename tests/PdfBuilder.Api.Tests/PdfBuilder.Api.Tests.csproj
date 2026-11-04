@@ -1,16 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    The OpenAPI tests call AddOpenApi, whose source generator emits interceptors. The Web SDK enables
+    them for the service; this project uses the plain SDK, so it opts in here.
+  -->
+  <PropertyGroup>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\PdfBuilder.Api\PdfBuilder.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <!-- One PostgreSQL fixture for every test project that needs a database, rather than a copy of it. -->
   <ItemGroup>
     <Compile Include="..\PdfBuilder.Infrastructure.Tests\Persistence\PostgresFixture.cs" Link="Persistence\PostgresFixture.cs" />
+  </ItemGroup>
+
+  <!-- Log capture for the authentication tests, shared with the stud's own tests. -->
+  <ItemGroup>
+    <Compile Include="..\Blocks.ServiceDefaults.Tests\Support\CapturingLoggerProvider.cs" Link="Support\CapturingLoggerProvider.cs" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,114 @@
+# PDF Builder — managing clients and API keys with the admin key.
+# VS Code: install the "REST Client" extension, then click "Send Request" above any block.
+# Rider and Visual Studio open .http files natively.
+#
+# Set @host to 8080 when running under Docker. @adminKey is the key printed by
+#   dotnet run --project tools/Blocks.Cli -- admin-key
+# whose hash the service has in Blocks:Admin:KeyHash. The value below is the published, local-only
+# key that compose.yaml is configured with: it works against `docker compose up` and nowhere else.
+
+@host = http://localhost:5052
+@adminKey = adm_lPQ25ykvuTW7HdOJLaJzfqnJsT4cKQfwwR5pgq4o
+
+
+### Register a client — 201, Location: /api/admin/clients/ecommerce.
+POST {{host}}/api/admin/clients
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "id": "ecommerce", "name": "E-commerce" }
+
+
+### List clients, ordered by id.
+GET {{host}}/api/admin/clients
+X-Api-Key: {{adminKey}}
+
+
+### Read one client.
+GET {{host}}/api/admin/clients/ecommerce
+X-Api-Key: {{adminKey}}
+
+
+### Issue a key that can submit and read jobs — 201. The response is the ONLY time the key is shown:
+# copy "key" into the product's configuration now.
+# @name issue
+POST {{host}}/api/admin/clients/ecommerce/keys
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "name": "production", "scopes": ["pdf:generate"] }
+
+
+### Use it: submit a job with the key just issued — 202.
+POST {{host}}/api/pdf/jobs
+X-Api-Key: {{issue.response.body.key}}
+Content-Type: application/json
+
+{ "templateKey": "invoice", "data": { "invoice": { "number": "INV-1" }, "items": [] } }
+
+
+### Issue a key that only reads templates, expiring at the end of the year.
+POST {{host}}/api/admin/clients/ecommerce/keys
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "name": "template viewer", "scopes": ["pdf:templates:read"], "expiresAt": "2026-12-31T23:59:59Z" }
+
+
+### List the client's keys — name, permissions, dates, state and last use; never the key itself.
+GET {{host}}/api/admin/clients/ecommerce/keys
+X-Api-Key: {{adminKey}}
+
+
+### Revoke the first key — 204, permanent. Within a minute every instance refuses it.
+DELETE {{host}}/api/admin/clients/ecommerce/keys/{{issue.response.body.keyId}}
+X-Api-Key: {{adminKey}}
+
+
+### Disable the client — all its keys are refused with CLIENT_DISABLED within a minute.
+PATCH {{host}}/api/admin/clients/ecommerce
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "disabled": true }
+
+
+### Enable it again — its keys that were not revoked work again.
+PATCH {{host}}/api/admin/clients/ecommerce
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "disabled": false }
+
+
+### 409 CLIENT_ID_TAKEN — ids are permanent and never reused.
+POST {{host}}/api/admin/clients
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "id": "ecommerce", "name": "Again" }
+
+
+### 400 VALIDATION_FAILED — ids are lowercase letters, digits and hyphens.
+POST {{host}}/api/admin/clients
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "id": "E-Commerce", "name": "E-commerce" }
+
+
+### 400 VALIDATION_FAILED — the message lists the permissions that exist.
+POST {{host}}/api/admin/clients/ecommerce/keys
+X-Api-Key: {{adminKey}}
+Content-Type: application/json
+
+{ "name": "everything", "scopes": ["pdf:everything"] }
+
+
+### 401 AUTH_REQUIRED — no key.
+GET {{host}}/api/admin/clients
+
+
+### 403 AUTH_SCOPE_MISSING — a client key, whatever its permissions, cannot manage clients.
+GET {{host}}/api/admin/clients
+X-Api-Key: {{issue.response.body.key}}

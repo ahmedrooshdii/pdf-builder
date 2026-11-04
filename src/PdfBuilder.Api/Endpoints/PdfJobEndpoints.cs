@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Blocks.ServiceDefaults;
 using FluentValidation;
 using MassTransit;
 using PdfBuilder.Api.Messaging;
@@ -19,7 +20,9 @@ internal static class PdfJobEndpoints
 {
     public static IEndpointRouteBuilder MapPdfJobEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/pdf/jobs").WithTags("PDF jobs");
+        var group = app.MapGroup("/api/pdf/jobs")
+            .WithTags("PDF jobs")
+            .RequirePermission(PdfPermissions.Generate);
 
         group.MapPost("/", EnqueueAsync)
             .WithName("EnqueuePdfJob")

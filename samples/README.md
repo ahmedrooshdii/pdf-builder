@@ -13,9 +13,24 @@ script wraps it; in `requests.http` the wrapping is written out in full.
 | `precision.json` | Money keeping its decimals, and a large value staying readable. |
 | `multipage.json` | 28 line items, so the table spills onto a second page. |
 
+## A key first
+
+Every `/api` call needs an API key in the `X-Api-Key` header; health checks and file downloads do
+not. `admin.http` registers a client and issues it a key with the admin key. Under
+`docker compose up`, the admin key is the published, local-only one written next to its hash in
+`compose.yaml`. With `dotnet run`, generate your own:
+
+```bash
+dotnet run --project tools/Blocks.Cli -- admin-key
+dotnet user-secrets --project src/PdfBuilder.Api set "Blocks:Admin:KeyHash" "<printed hash>"
+```
+
+The issued key is shown once, in the response that creates it. Copy it then.
+
 ## The helper script
 
 ```powershell
+$env:PDFBUILDER_API_KEY = 'pdf_…'      # or pass -ApiKey
 ./samples/Invoke-PdfJob.ps1 -PayloadPath templates/invoice.sample.json -Open
 ```
 
@@ -40,18 +55,25 @@ failed job prints its `errorCode`.
 
 Open it in VS Code with the **REST Client** extension (Rider and Visual Studio support `.http`
 natively) and click *Send Request* over any block. It covers the happy path, the optional-field
-cases, and each failure: the three that are refused at the edge with a 400, plus the one that is
-accepted and then fails in the worker with `TEMPLATE_NOT_FOUND`.
+cases, and each failure: the three that are refused at the edge with a 400, the one that is
+accepted and then fails in the worker with `TEMPLATE_NOT_FOUND`, and the two refusals for a
+missing or invalid key. Set `@apiKey` at the top first.
+
+## admin.http
+
+The management calls, in order: register a client, issue keys, list them, revoke one, disable and
+enable the client, and the refusals. Every one needs the admin key in `@adminKey`.
 
 ## curl
 
 ```bash
+export KEY='pdf_…'
 curl -X POST http://localhost:5052/api/pdf/jobs \
-  -H 'Content-Type: application/json' \
+  -H "X-Api-Key: $KEY" -H 'Content-Type: application/json' \
   -d "{\"templateKey\":\"invoice\",\"data\":$(cat templates/invoice.sample.json)}"
 
-curl http://localhost:5052/api/pdf/jobs/<jobId>
-curl -o invoice.pdf http://localhost:5052/files/<fileId>
+curl -H "X-Api-Key: $KEY" http://localhost:5052/api/pdf/jobs/<jobId>
+curl -o invoice.pdf http://localhost:5052/files/<fileId>      # no key, until file links are signed
 ```
 
 ## Things worth knowing while testing

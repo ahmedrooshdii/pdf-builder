@@ -36,6 +36,9 @@ is missing. See [configuration.md](configuration.md#database).
 `FileUrl` is built from, so getting it wrong means every response hands out a dead link —
 and nothing fails until a caller tries to download.
 
+`Blocks__Admin__KeyHash` is the hash of the operator's admin key. Without it the service does not
+start, and says so. See [configuration.md](configuration.md#admin-key) and [API keys](#api-keys).
+
 ### First start and upgrades
 
 On start the service applies any pending schema migrations (`Blocks:Database:MigrateOnStartup`), so
@@ -62,6 +65,47 @@ every readable file, once, and logs `Imported N authored template(s) from …`. 
   list is also kept in the `template_imports` table.
 - **Jobs that were in flight in the old version are lost once**, on the upgrade itself: they lived
   only in its memory. A caller that polls one gets 404, as it would have after any restart before.
+
+### Upgrading to API keys
+
+From this version every call to `/api` needs an `X-Api-Key`, and there is no setting that turns this
+off. A product that sends no key is refused with `401 AUTH_REQUIRED` from the moment the new version
+starts, and so is the web console until its sign-in ships (feature 004, released together with
+this). So, in this order:
+
+1. Generate the admin key on your own machine (`dotnet run --project tools/Blocks.Cli -- admin-key`)
+   and set its hash in the deployment ([configuration.md](configuration.md#admin-key)).
+2. Upgrade. Health checks need no key, so probes and load balancers carry on.
+3. Register each product as a client and issue it a key ([samples/admin.http](../samples/admin.http)),
+   then put the key in the product's configuration.
+
+Messages published straight to RabbitMQ are not affected: publishers are trusted through their
+broker credentials, as before.
+
+## API keys
+
+Each product is a **client** and holds one or more **keys**; the operator holds the **admin key**.
+Everything below is done with the admin key against `/api/admin/clients…`; every call is in
+[samples/admin.http](../samples/admin.http).
+
+- **Issuing.** A key has a name, one or more permissions, and optionally an expiry. The response that
+  issues it is the only time it is shown: the service stores only a hash. A lost key is not
+  recoverable; issue a new one and revoke the old.
+- **Permissions** are independent: `pdf:generate` (submit and read jobs), `pdf:templates:read` (list
+  and read templates), `pdf:templates:write` (create, duplicate, edit, publish, delete, preview).
+  Give a product only what it uses. A key's permissions never change; issue a new key instead.
+- **Revoking** is permanent. **Disabling** a client is the reversible switch: all its keys are refused
+  with `CLIENT_DISABLED` until it is enabled again, and the ones not revoked then work again.
+- **Within a minute.** Each instance remembers what it read about a key for 60 seconds, so a
+  revocation, a disable or an enable reaches every instance within a minute. A key's expiry is exact.
+- **Before revoking an old key**, check `lastUsedAt` in the key list: it is accurate to the minute,
+  and `null` means never used.
+- **Rotating the admin key.** Generate a new one, change `Blocks:Admin:KeyHash`, restart. The old key
+  stops working at once. Client keys are not affected.
+- **Logs.** Every log line of an accepted request carries `ClientId` and `KeyId`, or `Admin = true`.
+  Issuing, revoking, registering, disabling and enabling are logged at Information. No log line
+  contains a key, and refusals for bad keys are logged below Warning, so a scan of invented keys
+  cannot flood the logs.
 
 ## Health
 
@@ -103,12 +147,19 @@ termination grace period, or rolling deployments will cut jobs off mid-render.
 | Boxes instead of glyphs | Font family not in the image | Add the font package to the Dockerfile |
 | Requests answer `503` with `code: STORAGE_UNAVAILABLE` and a `Retry-After`; `/health/ready` is 503 while `/health/live` is 200 | The database is unreachable | The connection string, the database server, the network. Nothing was accepted; callers can retry. |
 | Service will not start, `ConnectionStrings:Database is required` | The connection string is not set | [configuration.md](configuration.md#database) |
+| Service will not start, `Blocks:Admin:KeyHash is required` or `must be 64 lowercase hexadecimal characters` | The admin key hash is not set, or the key was pasted instead of its hash | [configuration.md](configuration.md#admin-key) |
+| A product gets `401 AUTH_REQUIRED` | It sends no `X-Api-Key` (for example, it predates API keys) | Issue it a key: [API keys](#api-keys) |
+| A product gets `401 AUTH_INVALID_KEY` | The key is unknown, mistyped, revoked or expired; the answer is the same for all four on purpose | The client's key list: state, expiry. A truncated copy is the usual cause. |
+| A product gets `403 AUTH_SCOPE_MISSING` | The key is fine but lacks the permission this endpoint needs, or a client key called `/api/admin` | Issue a key with the permission |
+| A product gets `403 CLIENT_DISABLED` | Its client is disabled | Enable it, if that was not intended |
+| A key with requests answers `503 STORAGE_UNAVAILABLE` | The key could not be checked: the database is unreachable | As above; the product should retry, never treat this as a revoked key |
 | Service will not start, `The database schema is out of date` | `MigrateOnStartup` is `false` and migrations were not applied | Apply the migrations it names, or set it to `true` |
 | `_error` queue filling up | Transient failures exhausting retries | Consumer logs for the `CorrelationId` |
 | Service will not start, `License must be specified` | MassTransit bumped back to 9.x | Pin 8.5.x, or set `MT_LICENSE` |
 
 Every log line a job produces carries `CorrelationId` and `TemplateKey` in scope, so a structured
-sink can show one job's whole history together.
+sink can show one job's whole history together. Every log line of an HTTP request that passed
+authentication carries `ClientId` and `KeyId` (or `Admin = true`), so each call can be attributed.
 
 ## Scaling past one instance
 
@@ -131,7 +182,7 @@ shared, run one instance and scale vertically, or pin downloads to the instance 
 volume you watch, or run a cron job over `Storage:RootPath` by file age. A real fix belongs behind
 `IFileStorage` — an object-store lifecycle rule is the cheapest version.
 
-**Downloads are unauthenticated.** Anyone holding a `fileId` can fetch the PDF. The id is a
+**Downloads are unauthenticated**, unlike every `/api` call. Anyone holding a `fileId` can fetch the PDF. The id is a
 random GUID, so it is not guessable, but it is a bearer token in a URL: it will end up in
 proxy logs, browser history and email. If documents are sensitive, put authentication in front of
 `GET /files/{fileId}` or switch to time-limited signed URLs.

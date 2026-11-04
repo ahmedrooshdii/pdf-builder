@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- No database: key format, hashing, the handler and the endpoints over an in-memory store. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Blocks.ServiceDefaults\Blocks.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\src\Blocks.ServiceDefaults.EntityFramework\Blocks.ServiceDefaults.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\tools\Blocks.Cli\Blocks.Cli.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+  </ItemGroup>
+
+</Project>

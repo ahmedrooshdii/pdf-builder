@@ -21,7 +21,9 @@ with the codes below.
 
 ### `GET /api/admin/clients`
 
-`200` with the list, ordered by id.
+`200` with `{ "items": [ client, … ] }`, ordered by id. This is the stud list envelope without the
+paging members, because a deployment has tens of clients; `nextCursor`, `page`, `pageSize` and
+`total` are added, additively, when the shared paging lands (plan.md Complexity Tracking).
 
 ### `GET /api/admin/clients/{clientId}`
 
@@ -87,13 +89,25 @@ The response carries `Cache-Control: no-store`.
 
 ### `GET /api/admin/clients/{clientId}/keys`
 
-`200` with every key of the client, newest first, in the shape above **without** `key`. `status` is
+`200` with `{ "items": [ key, … ] }`: every key of the client, newest first, in the shape above
+**without** `key`. `status` is
 `Active`, `Expired` or `Revoked`. `404 CLIENT_NOT_FOUND`.
 
 ### `DELETE /api/admin/clients/{clientId}/keys/{keyId}`
 
 Revokes. `204`. Revoking a revoked key succeeds and changes nothing. `404 KEY_NOT_FOUND` when the
 client has no key with that id.
+
+## Storage outages
+
+While the database is unreachable every endpoint here answers `503 STORAGE_UNAVAILABLE` with
+`Retry-After: 5`. The admin key is still recognised; the operation itself needs storage.
+
+## Not yet: `Idempotency-Key`
+
+The two creating `POST`s do not take `Idempotency-Key` until the shared idempotency stud exists
+(plan.md Complexity Tracking). Registering a client twice already answers `409 CLIENT_ID_TAKEN`;
+issuing a key twice yields two keys, and the unwanted one is revoked.
 
 ## Codes
 

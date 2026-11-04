@@ -5,7 +5,7 @@ it. Work is queued rather than done on the request thread, because rendering cos
 browser's worth of memory.
 
 ```
-POST /api/pdf/jobs   { "templateKey": "invoice", "data": { … } }
+POST /api/pdf/jobs   X-Api-Key: pdf_k7f2a9c1_…   { "templateKey": "invoice", "data": { … } }
   -> 202 Accepted    { "jobId": "0865…-08df249c54be", "statusUrl": "/api/pdf/jobs/…" }
 
 GET  /api/pdf/jobs/{jobId}
@@ -18,6 +18,10 @@ GET  /files/{fileId}
 > **Use the `fileUrl` from step 2 as-is rather than building it yourself.** A `jobId` is a dashed
 > GUID and a `fileId` is 32 hex characters with no dashes; putting the first into `/files/` is the
 > most common way to get a confusing 404.
+
+Every `/api` call carries an API key in `X-Api-Key`, issued by the operator to each product (a
+**client**) with only the permissions it needs; `/health/*` and the file download need none. See
+[API keys](#api-keys) below.
 
 Services that speak the message bus skip the polling: publish `IGeneratePdfRequest` and receive
 `IGeneratePdfResponse`. See [docs/message-contracts.md](docs/message-contracts.md).
@@ -37,6 +41,7 @@ docker compose up --build
 # API docs:    http://localhost:8080/scalar/v1
 # RabbitMQ UI: http://localhost:15672   (guest / guest)
 # PostgreSQL:  localhost:5432           (pdf_builder / pdf_builder, this local stack only)
+# Admin key:   written beside its hash in compose.yaml (published, this local stack only)
 ```
 
 ### Without Docker
@@ -71,6 +76,14 @@ The schema is created on first start. If you are upgrading from a version that k
 files, they are imported once, automatically; see
 [operations.md](docs/operations.md#upgrading-from-file-based-templates).
 
+The service also will not start without the hash of an admin key. Generate one; the key is printed
+once, so keep it:
+
+```bash
+dotnet run --project tools/Blocks.Cli -- admin-key
+dotnet user-secrets --project src/PdfBuilder.Api set "Blocks:Admin:KeyHash" "<printed hash>"
+```
+
 > **Running in Development loads your user-secrets**, which may point at a real broker, and a local
 > process started that way joins the real queue as a consumer. When you only want to look at the
 > service, run it with `ASPNETCORE_ENVIRONMENT=Production`: user-secrets are not loaded.
@@ -78,11 +91,32 @@ files, they are imported once, automatically; see
 Check `/health/ready` returns 200 before sending work. `/health/live` answering while `/health/ready`
 returns 503 means a dependency (the broker or the database) is unreachable.
 
+## API keys
+
+With the admin key, register a client for the product and issue it a key. The key is in the
+response and nowhere else, ever: copy it into the product's configuration.
+
+```bash
+curl -X POST localhost:5052/api/admin/clients -H "X-Api-Key: $ADMIN" \
+  -H 'Content-Type: application/json' -d '{"id":"ecommerce","name":"E-commerce"}'
+curl -X POST localhost:5052/api/admin/clients/ecommerce/keys -H "X-Api-Key: $ADMIN" \
+  -H 'Content-Type: application/json' -d '{"name":"production","scopes":["pdf:generate"]}'
+```
+
+Permissions are `pdf:generate` (jobs), `pdf:templates:read` and `pdf:templates:write`. Keys can expire,
+be revoked (within a minute on every instance) or be refused together by disabling their client.
+Every call is in [samples/admin.http](samples/admin.http); the rules are in
+[operations.md](docs/operations.md#api-keys).
+
+> **The web app is refused until it has its own sign-in** (feature 004, released together with this
+> one): it sends no key. Use the samples or Scalar with a key in the meantime.
+
 ## Trying it
 
 The helper script does all three calls — submit, poll, download — and opens the result:
 
 ```powershell
+$env:PDFBUILDER_API_KEY = 'pdf_…'          # a key with pdf:generate
 ./samples/Invoke-PdfJob.ps1 -PayloadPath templates/invoice.sample.json -Open
 ```
 

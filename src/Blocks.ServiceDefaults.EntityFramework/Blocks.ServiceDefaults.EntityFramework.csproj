@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The clients and api_keys tables, added to a block's own DbContext, and the store over them.
+    Separate from Blocks.ServiceDefaults so that a project wanting only the handler does not take EF.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Blocks.ServiceDefaults\Blocks.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Blocks.ServiceDefaults.Tests" />
+  </ItemGroup>
+
+</Project>

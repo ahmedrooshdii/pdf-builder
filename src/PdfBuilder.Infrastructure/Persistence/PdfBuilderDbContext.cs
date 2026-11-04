@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.EntityFramework;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using PdfBuilder.Infrastructure.Persistence.Configurations;
@@ -7,7 +8,7 @@ namespace PdfBuilder.Infrastructure.Persistence;
 
 /// <summary>
 /// The block's database: job status, authored templates, the record of the one-time template
-/// import, and MassTransit's outbox tables.
+/// import, clients and their API keys, and MassTransit's outbox tables.
 /// </summary>
 /// <remarks>
 /// Public because the composition root hands it to MassTransit's outbox; the record types are
@@ -23,6 +24,9 @@ public sealed class PdfBuilderDbContext(DbContextOptions<PdfBuilderDbContext> op
         modelBuilder.Entity<PdfJobRecord>(PdfJobConfiguration.Configure);
         modelBuilder.Entity<AuthoredTemplateRecord>(AuthoredTemplateConfiguration.Configure);
         modelBuilder.Entity<TemplateImportRecord>(TemplateImportConfiguration.Configure);
+
+        // Clients and their API keys, defined by the shared authentication stud.
+        modelBuilder.AddBlocksClients();
 
         // The transactional outbox: a job and the message that starts it are committed together.
         modelBuilder.AddInboxStateEntity();

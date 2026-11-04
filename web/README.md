@@ -4,6 +4,11 @@ An Angular 22 front end for the service: pick a template, paste or load a JSON p
 watch the job until the PDF is ready to preview and download. Jobs you submit are remembered in the
 browser, since the API has no "list jobs" endpoint and forgets jobs after 24 hours.
 
+> **Refused by the API until console sign-in ships.** Every `/api` call now needs an `X-Api-Key`
+> (see [API keys](../README.md#api-keys)), and this app sends none, so its calls answer
+> `401 AUTH_REQUIRED`. Signing in with the admin key arrives with feature 004, which is released
+> together with API keys. Nothing in the app changed for this.
+
 ## Running it
 
 Start the API first (see the [root README](../README.md#running-it)), then:

@@ -111,6 +111,33 @@ the service refuses to start without it, naming the setting.
 For local development without Docker, a free hosted PostgreSQL (Neon, for example) or a local
 install both work; with Docker, `docker compose up` starts one for you.
 
+## Admin key
+
+Every call to `/api` needs an API key in the `X-Api-Key` header. Products get client keys from the
+operator; the operator holds the one admin key, which manages clients and keys and can call every
+operation. The service is configured with the admin key's **hash**, never the key, and refuses to
+start without it. There is deliberately no setting that turns authentication off.
+
+```json
+"Blocks": { "Admin": { "KeyHash": "3f0a…c91e" } }
+```
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `Blocks:Admin:KeyHash` | none, **required** | Lowercase hex SHA-256 of the admin key: 64 characters. Generate a key and its hash with `dotnet run --project tools/Blocks.Cli -- admin-key`; the key is printed once. A missing value, or one that is not 64 hex characters (the key pasted instead of its hash, say), stops start-up with an error naming this setting. Environment form: `Blocks__Admin__KeyHash`. |
+
+Where each deployment gets it:
+
+| Deployment | Source |
+| --- | --- |
+| `docker compose up` | Set in `compose.yaml` to the hash of a **published, local-only** admin key, written beside it. Never use that key anywhere else. |
+| `dotnet run` | `dotnet user-secrets --project src/PdfBuilder.Api set "Blocks:Admin:KeyHash" "<hash>"` |
+| Oracle VM | `ADMIN_KEY_HASH` in `/opt/pdf-builder/.env`; `deploy/compose.prod.yaml` requires it |
+| Hugging Face Space | Secret `Blocks__Admin__KeyHash` |
+
+Health checks (`/health/live`, `/health/ready`) and file downloads (`/files/{fileId}`) need no key.
+Issuing keys, permissions and refusals: [operations.md](operations.md#api-keys).
+
 ## Storage
 
 ```json
@@ -173,6 +200,7 @@ scope, so a structured sink can show every line for one job together.
 
 ```bash
 ConnectionStrings__Database="Host=postgres;Database=pdf_builder;Username=pdf_builder;Password=…"
+Blocks__Admin__KeyHash=3f0a…c91e
 RabbitMq__Host=rabbitmq
 RabbitMq__Username=pdf-builder
 RabbitMq__Password=…

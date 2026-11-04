@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults;
 using MediatR;
 using PdfBuilder.Application.Features.Templates;
 using PdfBuilder.Domain.Templates;
@@ -17,11 +18,13 @@ internal static class TemplateEndpoints
         group.MapGet("/", async (ISender sender, CancellationToken ct) =>
                 (await sender.Send(new ListTemplatesQuery(), ct)).Select(TemplateSummaryResponse.From))
             .WithName("ListTemplates")
+            .RequirePermission(PdfPermissions.TemplatesRead)
             .WithSummary("List built-in and authored templates");
 
         group.MapGet("/{templateKey}", async (string templateKey, ISender sender, CancellationToken ct) =>
                 TemplateResponse.From(await sender.Send(new GetTemplateQuery(templateKey), ct)))
             .WithName("GetTemplate")
+            .RequirePermission(PdfPermissions.TemplatesRead)
             .WithSummary("Read a template's draft and published content")
             .Produces<TemplateResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound);
@@ -33,6 +36,7 @@ internal static class TemplateEndpoints
                 return Results.Created($"/api/templates/{view.Key}", TemplateResponse.From(view));
             })
             .WithName("CreateTemplate")
+            .RequirePermission(PdfPermissions.TemplatesWrite)
             .WithSummary("Start a new draft template")
             .WithDescription("Without content, the draft starts from a small working example.")
             .Produces<TemplateResponse>(StatusCodes.Status201Created)
@@ -47,6 +51,7 @@ internal static class TemplateEndpoints
                 return Results.Created($"/api/templates/{view.Key}", TemplateResponse.From(view));
             })
             .WithName("DuplicateTemplate")
+            .RequirePermission(PdfPermissions.TemplatesWrite)
             .WithSummary("Copy a template's draft into a new draft")
             .Produces<TemplateResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
@@ -58,6 +63,7 @@ internal static class TemplateEndpoints
                 TemplateResponse.From(await sender.Send(
                     new SaveTemplateDraftCommand(templateKey, request.Revision, request.Content.ToDomain()), ct)))
             .WithName("SaveTemplateDraft")
+            .RequirePermission(PdfPermissions.TemplatesWrite)
             .WithSummary("Replace a template's draft")
             .WithDescription("Send the revision the edit was based on. A stale one is refused with 409.")
             .Produces<TemplateResponse>()
@@ -69,6 +75,7 @@ internal static class TemplateEndpoints
                 string templateKey, PublishTemplateRequest request, ISender sender, CancellationToken ct) =>
                 TemplateResponse.From(await sender.Send(new PublishTemplateCommand(templateKey, request.Revision), ct)))
             .WithName("PublishTemplate")
+            .RequirePermission(PdfPermissions.TemplatesWrite)
             .WithSummary("Make the draft what jobs render")
             .WithDescription("The draft is rendered with its sample data first; one that fails is refused with 422.")
             .Produces<TemplateResponse>()
@@ -82,6 +89,7 @@ internal static class TemplateEndpoints
                 return Results.NoContent();
             })
             .WithName("DeleteTemplate")
+            .RequirePermission(PdfPermissions.TemplatesWrite)
             .WithSummary("Delete an authored template")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -92,6 +100,7 @@ internal static class TemplateEndpoints
                     await sender.Send(new PreviewTemplateCommand(request.Content.ToDomain()), ct),
                     "text/html; charset=utf-8"))
             .WithName("PreviewTemplate")
+            .RequirePermission(PdfPermissions.TemplatesWrite)
             .WithSummary("Render HTML, CSS and sample data to HTML, without saving or printing")
             .Produces<string>(StatusCodes.Status200OK, "text/html")
             .ProducesValidationProblem()

@@ -51,14 +51,14 @@ recoverable or logged; refusals identical across unknown/revoked/expired; outage
 | II | Block stands alone | ✅ | ✅ Keys live in the block's own database; nothing calls another service. |
 | III | Generic, no product knowledge | ⚠ | ⚠ "Client" is generic. The data tables from 001 still have no `client_id`: carried from 001, see Complexity Tracking. |
 | IV | Blocks never call each other | ✅ | ✅ |
-| V | Same studs | ✅ | ✅ This feature **is** the auth stud, built in `Blocks.*` packages; refusals use the stud codes from `docs/blocks/04-backend.md`; health stays open. |
+| V | Same studs | ✅ | ⚠ This feature **is** the auth stud, built in `Blocks.*` packages; refusals use the stud codes from `docs/blocks/04-backend.md`; health stays open. The admin lists use the envelope without paging, and admin `POST`s take no `Idempotency-Key` yet: see Complexity Tracking. |
 | VI | Identity from claims only | ✅ | ✅ `ICurrentClient` reads claims; no Application code inspects headers or schemes. |
 | VII | Contracts change additively | ⚠ | ⚠ Message contracts unchanged. HTTP: requiring a key on existing endpoints is a breaking change for keyless callers, shipped in place rather than on a new path. Justified below. |
 | VIII | Secrets unrecoverable, shown once | ✅ | ✅ SHA-256 hashes, constant-time comparison, key in one response with `Cache-Control: no-store`, never logged; admin key held as a hash. |
 | IX | Layering by tooling | ✅ | ✅ New boundary (`Blocks.*` must not reference `PdfBuilder.*`) enforced by an architecture test. |
 | X | Any hardware, offline | ✅ | ✅ No external call; no new image dependency. |
 
-**Result**: passes with two justified deviations.
+**Result**: passes with four justified deviations (two under V, one each under III and VII).
 
 ## Project Structure
 
@@ -158,4 +158,6 @@ references `Blocks.ServiceDefaults.EntityFramework` (for the model and the store
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
 | VII: requiring a key on the existing `/api/pdf/jobs` and `/api/templates` endpoints breaks keyless callers, in place, not on a new path | The point of the feature is that nothing is open (spec FR-014, FR-023). The clarification of 2026-11-03 found no production callers to break: the VM deploy is unconfigured and the Space is disabled. | An unauthenticated copy under the old paths, or a `/api/v2` with keys: leaves the service open, which is the problem being fixed. An "authentication off" setting: rejected in the clarification. |
+| V: `GET /api/admin/clients` and `GET …/keys` return the list envelope with `items` only, without cursor or page paging | A deployment has tens of clients and keys; the shared paging (cursor and page, with `total`) does not exist yet and belongs with the console lists of 004. | Bare arrays: adding paging later would change the response shape, a breaking change (VII). Building paging now: a second stud inside this feature for lists that fit on one screen. |
+| V: the two creating `POST`s under `/api/admin` do not take `Idempotency-Key` | The idempotency stud is its own feature (spec Assumptions: "idempotency … separate features"). Retrying a client registration already answers `409 CLIENT_ID_TAKEN`; a retried key issue yields a second key the operator revokes. | Implementing idempotency storage here for two operator-only endpoints, ahead of the shared design. |
 | III: `pdf_jobs` and `authored_templates` still have no `client_id` (carried from 001) | Callers are identified now; separating their data is feature 003, which needs this feature's clients to exist first. | Adding `client_id` here: mixes two features' migrations and reviews, and 003's backfill rule (the default client) belongs with its spec. |

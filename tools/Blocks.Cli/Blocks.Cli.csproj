@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Operator tooling shared by every block. For now one command: generating the admin key. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Blocks.ServiceDefaults\Blocks.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

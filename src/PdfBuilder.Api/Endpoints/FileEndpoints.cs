@@ -15,7 +15,10 @@ internal static class FileEndpoints
             .WithName("DownloadPdf")
             .WithSummary("Download a generated PDF")
             .Produces(StatusCodes.Status200OK, contentType: "application/pdf")
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            // Open until file links become signed and expiring: end users and other services follow
+            // these links, and they have no key.
+            .AllowAnonymous();
 
         return app;
     }
