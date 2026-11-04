@@ -2,7 +2,11 @@ import { Injectable, inject } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { RouterStateSnapshot, TitleStrategy } from '@angular/router';
 
-const APP_NAME = 'PDF Builder';
+/**
+ * The block's name, in one place: page titles, the header and the sign-in card read it from here.
+ * A deployment's own product name replaces it with runtime branding (feature 012).
+ */
+export const APP_NAME = 'PDF Builder';
 
 /** Turns a route's `title` into `"New PDF · PDF Builder"`, so routes only name themselves. */
 @Injectable()

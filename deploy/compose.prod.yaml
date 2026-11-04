@@ -58,6 +58,11 @@ services:
       # Hash of the admin key, from `dotnet run --project tools/Blocks.Cli -- admin-key`. The key itself
       # never goes on the VM.
       Blocks__Admin__KeyHash: ${ADMIN_KEY_HASH:?set ADMIN_KEY_HASH in .env}
+      # The reverse proxy's address or network, so the console's sign-in limit (5 failures a minute)
+      # counts each browser apart instead of counting everyone as the proxy. Unset: loopback only.
+      # Blocks__ForwardedHeaders__KnownNetworks: 172.16.0.0/12
+      # How long a console sign-in lasts, from sign-in (00:05:00 to 24:00:00; default 12 hours).
+      # Blocks__Console__SessionLifetime: "12:00:00"
 
       Storage__RootPath: /data/files
       TemplateStore__RootPath: /app/Templates

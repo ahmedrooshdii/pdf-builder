@@ -6,6 +6,11 @@ import { Icon } from './icon';
 /**
  * shadcn/ui `base-nova` Dialog, on the native `<dialog>` element, which already provides the focus
  * trap, Escape to close, the top layer and inert background content.
+ *
+ * `dismissible = false` is for a dialog the user must answer, such as a secret shown once: no close
+ * button, no backdrop click, Escape does nothing, and if the browser closes it anyway (Chrome lets a
+ * second Escape through a prevented `cancel`), it is opened again at once. Only setting `open` to
+ * false closes it.
  */
 @Component({
   selector: 'app-dialog',
@@ -17,22 +22,27 @@ import { Icon } from './icon';
       #dialog
       data-slot="dialog-content"
       [class]="computedClass()"
+      [attr.role]="role() === 'alertdialog' ? 'alertdialog' : null"
       [attr.aria-labelledby]="labelledBy()"
-      (close)="open.set(false)"
+      [attr.aria-describedby]="describedBy()"
+      (cancel)="onCancel($event)"
+      (close)="onClose()"
       (click)="closeOnBackdrop($event)"
     >
       <ng-content />
-      <button
-        appButton
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        class="absolute top-2 right-2"
-        aria-label="Close"
-        (click)="open.set(false)"
-      >
-        <app-icon name="x" />
-      </button>
+      @if (showCloseButton()) {
+        <button
+          appButton
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          class="absolute top-2 right-2"
+          aria-label="Close"
+          (click)="open.set(false)"
+        >
+          <app-icon name="x" />
+        </button>
+      }
     </dialog>
   `,
   host: { class: 'contents' },
@@ -41,9 +51,20 @@ export class Dialog {
   readonly open = model(false);
   /** Id of the element that names the dialog, for screen readers. */
   readonly labelledBy = input<string>();
+  /** Id of the element that describes the dialog, for screen readers. */
+  readonly describedBy = input<string>();
+  /** False: only the dialog's own buttons can close it (see the class comment). */
+  readonly dismissible = input(true);
+  /** The corner close button. Never shown when the dialog is not dismissible. */
+  readonly showClose = input(true);
+  /** Whether a click on the backdrop closes the dialog. Never when it is not dismissible. */
+  readonly backdropCloses = input(true);
+  readonly role = input<'dialog' | 'alertdialog'>('dialog');
   readonly userClass = input<ClassValue>('', { alias: 'class' });
 
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+
+  protected readonly showCloseButton = computed(() => this.dismissible() && this.showClose());
 
   protected readonly computedClass = computed(() =>
     cn(
@@ -63,9 +84,22 @@ export class Dialog {
     });
   }
 
+  protected onCancel(event: Event): void {
+    if (!this.dismissible()) event.preventDefault();
+  }
+
+  /** The element closed. For a dialog that must be answered, a close nobody asked for is undone. */
+  protected onClose(): void {
+    if (!this.dismissible() && this.open()) {
+      this.dialog().nativeElement.showModal();
+      return;
+    }
+    this.open.set(false);
+  }
+
   /** A click whose target is the dialog itself landed on the backdrop, outside the content box. */
   protected closeOnBackdrop(event: MouseEvent): void {
-    if (event.target === this.dialog().nativeElement) {
+    if (event.target === this.dialog().nativeElement && this.dismissible() && this.backdropCloses()) {
       this.open.set(false);
     }
   }
@@ -86,4 +120,14 @@ export class DialogTitle {}
 })
 export class DialogDescription {}
 
-export const DIALOG = [Dialog, DialogHeader, DialogTitle, DialogDescription] as const;
+/** The button row at the foot of a dialog, on the muted strip shadcn uses. */
+@Directive({
+  selector: '[appDialogFooter]',
+  host: {
+    'data-slot': 'dialog-footer',
+    class: '-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end',
+  },
+})
+export class DialogFooter {}
+
+export const DIALOG = [Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter] as const;

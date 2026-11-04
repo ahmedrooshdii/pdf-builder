@@ -1,4 +1,5 @@
-import { Injectable, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { ClientContext } from '../../../core/client-context/client-context';
 import { BROWSER_STORAGE } from '../../../core/storage/browser-storage';
 import { PdfJob } from './pdf-job.models';
 
@@ -18,26 +19,40 @@ function upgrade(entry: PdfJob & { templateId?: string }): PdfJob {
  * The API has no "list jobs" endpoint and forgets jobs after a day, so this is the only record a
  * user has of what they sent. It is kept per browser and is a convenience, not a source of truth:
  * the server's answer always wins when a job is polled.
+ *
+ * Each entry remembers the client it was submitted for, and `jobs` holds only the chosen client's
+ * (research R16). Entries saved before console sign-in have no client and are shown for none; they
+ * age out under the 50-entry cap.
  */
 @Injectable({ providedIn: 'root' })
 export class JobHistoryStore {
   private readonly storage = inject(BROWSER_STORAGE);
+  private readonly context = inject(ClientContext);
   private readonly entries = signal<readonly PdfJob[]>(this.load());
 
-  readonly jobs = this.entries.asReadonly();
+  /** The chosen client's jobs. */
+  readonly jobs = computed(() => {
+    const client = this.context.current();
+    return client ? this.entries().filter((job) => job.clientId === client) : [];
+  });
 
   constructor() {
     effect(() => this.save(this.entries()));
   }
 
-  /** Adds the job, or replaces the entry with the same id while keeping its position. */
+  /**
+   * Adds the job, or replaces the entry with the same id while keeping its position. A new entry is
+   * recorded for the chosen client; an update keeps the client the entry already had, since the
+   * server's answer does not carry one.
+   */
   record(job: PdfJob): void {
     this.entries.update((jobs) => {
       const index = jobs.findIndex((j) => j.jobId === job.jobId);
       if (index === -1) {
-        return [job, ...jobs].slice(0, MAX_ENTRIES);
+        const clientId = job.clientId ?? this.context.current() ?? undefined;
+        return [{ ...job, clientId }, ...jobs].slice(0, MAX_ENTRIES);
       }
-      return jobs.map((j, i) => (i === index ? job : j));
+      return jobs.map((j, i) => (i === index ? { ...job, clientId: job.clientId ?? j.clientId } : j));
     });
   }
 

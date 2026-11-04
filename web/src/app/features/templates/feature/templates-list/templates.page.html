@@ -8,7 +8,9 @@
   </div>
   <button appButton type="button" (click)="openCreate()">
     <app-icon name="plus" data-icon="inline-start" />
-    New template
+    New template@if (client(); as id) {
+      for <span class="font-mono">{{ id }}</span>
+    }
   </button>
 </header>
 

@@ -1,0 +1,146 @@
+<header class="sticky top-0 z-40 w-full border-b bg-background">
+  <div class="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 md:gap-4">
+    <a routerLink="/" [queryParams]="clientParams()" class="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
+      <app-logo class="size-7" />
+      <span class="hidden lg:inline">{{ appName }}</span>
+    </a>
+
+    <!-- Client switcher: the chosen client, always in this place (FR-014). -->
+    <app-dropdown-menu label="Clients">
+      <button
+        appButton
+        appDropdownMenuTrigger
+        type="button"
+        variant="outline"
+        class="h-9 max-w-56 justify-start gap-2 px-2.5"
+        data-testid="client-switcher"
+      >
+        @if (context.currentClient(); as client) {
+          @if (client.status === 'Disabled') {
+            <app-icon name="lock" class="text-muted-foreground" />
+          }
+          <span class="grid min-w-0 text-left leading-tight">
+            <span class="truncate text-sm font-medium">{{ client.name }}</span>
+            <span class="truncate font-mono text-[0.7rem] text-muted-foreground">
+              {{ client.id }}@if (client.status === 'Disabled') {
+                · Disabled
+              }
+            </span>
+          </span>
+        } @else if (context.current(); as id) {
+          <span class="truncate font-mono text-sm">{{ id }}</span>
+        } @else {
+          <span class="text-sm text-muted-foreground">Choose a client</span>
+        }
+        <app-icon name="chevrons-up-down" class="ml-auto text-muted-foreground" />
+      </button>
+
+      <div appDropdownMenuLabel>Clients</div>
+      @if (context.clients.hasValue()) {
+        @for (client of context.clients.value(); track client.id) {
+          <button appDropdownMenuItem type="button" (click)="context.select(client.id)">
+            @if (client.id === context.current()) {
+              <app-icon name="check" />
+            } @else if (client.status === 'Disabled') {
+              <app-icon name="lock" />
+            } @else {
+              <span class="size-4"></span>
+            }
+            <span class="grid min-w-0 leading-tight">
+              <span class="truncate">{{ client.name }}</span>
+              <span class="truncate font-mono text-xs text-muted-foreground">
+                {{ client.id }}@if (client.status === 'Disabled') {
+                  · Disabled
+                }
+              </span>
+            </span>
+          </button>
+        } @empty {
+          <p class="px-2 py-1.5 text-sm text-muted-foreground">No clients yet.</p>
+        }
+      } @else if (clientsProblem()) {
+        <p class="px-2 py-1.5 text-sm text-destructive" role="alert">Clients could not be loaded.</p>
+        <button appDropdownMenuItem type="button" (click)="context.reload()">
+          <app-icon name="refresh" />
+          Try again
+        </button>
+      } @else {
+        <p class="px-2 py-1.5 text-sm text-muted-foreground" aria-busy="true">Loading clients…</p>
+      }
+      <div appDropdownMenuSeparator></div>
+      <a appDropdownMenuItem routerLink="/clients" [queryParams]="{ add: 1 }">
+        <app-icon name="plus" />
+        Add client
+      </a>
+    </app-dropdown-menu>
+
+    <nav class="hidden items-center gap-1 md:flex" aria-label="Main">
+      @for (link of links; track link.path) {
+        <a
+          appButton
+          variant="ghost"
+          size="sm"
+          [routerLink]="link.path"
+          [queryParams]="clientParams()"
+          routerLinkActive="bg-muted text-foreground"
+          [routerLinkActiveOptions]="{ paths: link.exact ? 'exact' : 'subset', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' }"
+          ariaCurrentWhenActive="page"
+          class="text-muted-foreground"
+        >
+          <app-icon [name]="link.icon" data-icon="inline-start" />
+          {{ link.label }}
+        </a>
+      }
+    </nav>
+
+    <div class="ml-auto flex items-center gap-1">
+      <!-- Below md the nav folds into this menu; the switcher and the session menu stay. -->
+      <app-dropdown-menu label="Pages" align="end" class="md:hidden">
+        <button appButton appDropdownMenuTrigger type="button" variant="ghost" size="icon" aria-label="Pages" class="md:hidden">
+          <app-icon name="menu" />
+        </button>
+        @for (link of links; track link.path) {
+          <a appDropdownMenuItem [routerLink]="link.path" [queryParams]="clientParams()">
+            <app-icon [name]="link.icon" />
+            {{ link.label }}
+          </a>
+        }
+      </app-dropdown-menu>
+
+      <app-theme-toggle />
+
+      <!-- The trigger itself says when the session ends, so it is always visible (FR-011). -->
+      <app-dropdown-menu label="Session" align="end">
+        <button appButton appDropdownMenuTrigger type="button" variant="ghost" size="sm" data-testid="session-menu">
+          <app-icon name="user-round" data-icon="inline-start" />
+          <span>
+            Operator
+            @if (session.expiresAt(); as ends) {
+              <span class="text-muted-foreground">· until {{ ends | date: 'HH:mm' }}</span>
+            }
+          </span>
+        </button>
+        <div appDropdownMenuLabel>Signed in as operator</div>
+        @if (session.expiresAt(); as ends) {
+          <p class="grid px-2 pb-1.5 text-sm">
+            <span>Session ends at {{ ends | date: 'HH:mm' }}</span>
+            <span class="font-mono text-xs text-muted-foreground">{{ sessionEndsUtc() }}</span>
+          </p>
+        }
+        <div appDropdownMenuSeparator></div>
+        <button appDropdownMenuItem type="button" (click)="signOut()">
+          <app-icon name="log-out" />
+          Sign out
+        </button>
+      </app-dropdown-menu>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+  @if (choosingClient()) {
+    <app-choose-client />
+  } @else {
+    <router-outlet />
+  }
+</main>

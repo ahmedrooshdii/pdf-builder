@@ -19,8 +19,9 @@ builder.Services
     .AddProblemDetails()
     .AddOpenApi(options => options.AddDocumentTransformer<ApiKeySecurityTransformer>());
 
-// Every endpoint needs a key unless it says otherwise below. There is no setting that turns this off.
-builder.Services.AddBlocksAuthentication(PdfPermissions.BlockCode, PdfPermissions.All);
+// Every endpoint needs a key or a console session unless it says otherwise below. There is no setting
+// that turns this off.
+builder.Services.AddBlocksAuthentication(PdfPermissions.BlockCode, PdfPermissions.Descriptors);
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -28,9 +29,8 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 var app = builder.Build();
 
 app.UseExceptionHandler();
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseBlocksClientLogScope();
+// Forwarded headers from known proxies, authentication, the console rules, authorization, log scope.
+app.UseBlocksAuthentication();
 
 // Docs are open in non-production only. Put them behind authentication before enabling in production.
 if (!app.Environment.IsProduction())
@@ -51,6 +51,7 @@ app.MapPdfJobEndpoints();
 app.MapFileEndpoints();
 app.MapTemplateEndpoints();
 app.MapBlocksAdmin();
+app.MapBlocksConsole();
 
 app.Run();
 

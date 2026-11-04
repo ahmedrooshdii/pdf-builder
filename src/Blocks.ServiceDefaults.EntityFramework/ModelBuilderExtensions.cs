@@ -60,4 +60,43 @@ public static class ModelBuilderExtensions
 
         return modelBuilder;
     }
+
+    /// <summary>
+    /// Adds <c>console_sessions</c> and <c>data_protection_keys</c>. Register
+    /// <see cref="DataProtectionExtensions.AddBlocksDataProtection{TContext}"/> to keep the key ring in that table.
+    /// </summary>
+    public static ModelBuilder AddBlocksConsoleSessions(this ModelBuilder modelBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
+        modelBuilder.Entity<ConsoleSessionRecord>(session =>
+        {
+            session.ToTable("console_sessions", table =>
+            {
+                table.HasCheckConstraint("ck_console_sessions_id_hash_length", "octet_length(id_hash) = 32");
+                table.HasCheckConstraint("ck_console_sessions_fingerprint_length", "octet_length(admin_key_fingerprint) = 16");
+            });
+
+            session.HasKey(s => s.IdHash).HasName("pk_console_sessions");
+
+            session.Property(s => s.IdHash).HasColumnName("id_hash");
+            session.Property(s => s.CreatedAt).HasColumnName("created_at");
+            session.Property(s => s.ExpiresAt).HasColumnName("expires_at");
+            session.Property(s => s.RevokedAt).HasColumnName("revoked_at");
+            session.Property(s => s.AdminKeyFingerprint).HasColumnName("admin_key_fingerprint");
+
+            session.HasIndex(s => s.ExpiresAt).HasDatabaseName("ix_console_sessions_expires_at");
+        });
+
+        modelBuilder.Entity<DataProtectionKeyRecord>(key =>
+        {
+            key.ToTable("data_protection_keys");
+            key.HasKey(k => k.Id).HasName("pk_data_protection_keys");
+            key.Property(k => k.Id).HasColumnName("id").UseIdentityByDefaultColumn();
+            key.Property(k => k.FriendlyName).HasColumnName("friendly_name");
+            key.Property(k => k.Xml).HasColumnName("xml");
+        });
+
+        return modelBuilder;
+    }
 }

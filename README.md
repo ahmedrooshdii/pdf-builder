@@ -108,8 +108,10 @@ be revoked (within a minute on every instance) or be refused together by disabli
 Every call is in [samples/admin.http](samples/admin.http); the rules are in
 [operations.md](docs/operations.md#api-keys).
 
-> **The web app is refused until it has its own sign-in** (feature 004, released together with this
-> one): it sends no key. Use the samples or Scalar with a key in the meantime.
+The web console signs in with the admin key (it never keeps it) and can do the same from its
+**API keys** and **Clients** pages: create a key (shown once), see when each was last used, revoke
+it, add and disable clients. It always shows which client it is working on. Serve it over HTTPS
+from the same site as the API; see [operations.md](docs/operations.md#console-sign-in).
 
 ## Trying it
 

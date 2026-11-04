@@ -1,28 +1,11 @@
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { Logo } from './core/layout/logo';
-import { ThemeToggle } from './core/theme/theme-toggle';
-import { Button } from './shared/ui/button';
-import { Icon, IconName } from './shared/ui/icon';
+import { RouterOutlet } from '@angular/router';
 
-interface NavLink {
-  readonly path: string;
-  readonly label: string;
-  readonly icon: IconName;
-  /** Only the exact path lights the link, so /jobs is not active on /jobs/new. */
-  readonly exact: boolean;
-}
-
+/** The root: the sign-in page and the signed-in shell are both routes beneath it. */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Button, Icon, Logo, ThemeToggle],
+  imports: [RouterOutlet],
   templateUrl: './app.html',
-  host: { class: 'flex min-h-dvh flex-col' },
+  host: { class: 'contents' },
 })
-export class App {
-  protected readonly links: readonly NavLink[] = [
-    { path: '/jobs/new', label: 'New PDF', icon: 'plus', exact: true },
-    { path: '/jobs', label: 'Jobs', icon: 'list', exact: true },
-    { path: '/templates', label: 'Templates', icon: 'layout-template', exact: false },
-  ];
-}
+export class App {}

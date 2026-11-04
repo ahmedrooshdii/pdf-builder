@@ -63,4 +63,86 @@ public sealed class CurrentClientTests
         Assert.Equal(true, lines[2].Scope["Admin"]);
         Assert.False(lines[2].Scope.ContainsKey("ClientId"));
     }
+
+    private static HttpClient Acting(HttpClient client, params string[] clientIds)
+    {
+        foreach (var id in clientIds)
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Client-Id", id);
+        return client;
+    }
+
+    [Fact]
+    public async Task The_admin_key_acts_as_the_client_named_in_x_client_id()
+    {
+        await using var host = await StudHost.StartAsync();
+
+        var caller = await Acting(host.Admin(), "ecommerce").GetFromJsonAsync<JsonElement>("/whoami", Ct);
+
+        Assert.Equal("ecommerce", caller.GetProperty("clientId").GetString());
+        Assert.Equal(JsonValueKind.Null, caller.GetProperty("keyId").ValueKind);
+        Assert.True(caller.GetProperty("isAdmin").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_console_session_acts_as_the_client_named_in_x_client_id()
+    {
+        await using var host = await StudHost.StartAsync();
+        var cookie = await host.SignInAsync(Ct);
+
+        var caller = await Acting(host.Session(cookie), "erp").GetFromJsonAsync<JsonElement>("/whoami", Ct);
+
+        Assert.Equal("erp", caller.GetProperty("clientId").GetString());
+        Assert.True(caller.GetProperty("isAdmin").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_client_key_ignores_x_client_id_even_when_it_is_malformed()
+    {
+        await using var host = await StudHost.StartAsync();
+        var key = host.Store.Seed("erp", AllPermissions, host.Clock.Now);
+
+        var named = await Acting(host.Client(key), "ecommerce").GetFromJsonAsync<JsonElement>("/whoami", Ct);
+        Assert.Equal("erp", named.GetProperty("clientId").GetString());
+
+        var malformed = await Acting(host.Client(key), "Bad_Id").GetFromJsonAsync<JsonElement>("/whoami", Ct);
+        Assert.Equal("erp", malformed.GetProperty("clientId").GetString());
+    }
+
+    [Theory]
+    [InlineData("Bad_Id")]
+    [InlineData("1shop")]
+    public async Task A_malformed_x_client_id_from_the_admin_is_refused_before_the_endpoint(string value)
+    {
+        await using var host = await StudHost.StartAsync();
+
+        using var response = await Acting(host.Admin(), value).GetAsync("/generate", Ct);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Equal("VALIDATION_FAILED", problem.GetProperty("code").GetString());
+        Assert.True(problem.GetProperty("errors").TryGetProperty("X-Client-Id", out _));
+        Assert.DoesNotContain(host.Logs.Entries, e => e.Message == "generating");
+    }
+
+    [Fact]
+    public async Task X_client_id_sent_twice_by_the_admin_is_refused()
+    {
+        await using var host = await StudHost.StartAsync();
+
+        using var response = await Acting(host.Admin(), "ecommerce", "erp").GetAsync("/generate", Ct);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_admin_acting_as_a_client_is_logged_with_that_client()
+    {
+        await using var host = await StudHost.StartAsync();
+
+        await Acting(host.Admin(), "ecommerce").GetStringAsync("/generate", Ct);
+
+        var line = Assert.Single(host.Logs.Entries, e => e.Message == "generating");
+        Assert.Equal(true, line.Scope["Admin"]);
+        Assert.Equal("ecommerce", line.Scope["ClientId"]);
+    }
 }

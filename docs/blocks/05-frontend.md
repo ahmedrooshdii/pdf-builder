@@ -176,6 +176,27 @@ image needs no environment variables or rebuild.
 Each follows the existing feature layout: `data-access/` (API wrapper, models), `feature/` (routed
 pages), `ui/` (presentational components), and a `<name>.routes.ts` default export.
 
+**Built so far** (feature 004, `specs/004-console-sign-in-keys`): `console/auth`, `console/api-keys`
+and `console/clients` (without per-client limit overrides, which wait for 008), `core/auth`
+(`SessionService`, the `signedIn` guard, a safe `returnUrl`), `core/client-context`, and the
+interceptor above. Differences from this page:
+
+- **The shell is the existing top header**, now carrying the client switcher (name, monospace id,
+  disabled marker, "Add client"), the nav and a session menu whose button shows when the session ends.
+  The inset sidebar of [02 Layout](02-ui-ux.md#layout) waits for the overview and the server-side jobs
+  list (010), where its extra space is first needed. There is no "All clients" choice yet: every page
+  works within one client.
+- **`ClientsApi` is in `shared/data-access/`**, because `core/client-context` and `console/clients`
+  both use it and `core` may not import a feature.
+- **The permissions on the create-key form come from `GET /api/admin/scopes`**, with descriptions,
+  rather than from `BLOCK_CONFIG`, so the console cannot drift from the service.
+- **The reveal dialog re-opens itself if the browser closes it.** Chrome lets a second Escape close a
+  modal whose `cancel` was prevented, so preventing `cancel` alone is not enough. Leaving the page
+  while it is open asks first, and closing the tab triggers the browser's leave-page prompt.
+- **ESLint's layering rules treat each `features/console/<name>/` as its own feature.**
+- **The local job history records the client** each job was submitted for and shows only the chosen
+  client's.
+
 ### Models
 
 Still mirrored by hand from the .NET records, as today. With the stud endpoints the surface roughly

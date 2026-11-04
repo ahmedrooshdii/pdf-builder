@@ -1,5 +1,6 @@
 using Blocks.ServiceDefaults.Authentication;
 using Blocks.ServiceDefaults.Tests.Support;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace Blocks.ServiceDefaults.Tests;
@@ -57,5 +58,66 @@ public sealed class BlocksAuthOptionsTests
         var exception = await Assert.ThrowsAsync<OptionsValidationException>(() => StudHost.StartAsync(adminKeyHash: ""));
 
         Assert.Contains("Blocks:Admin:KeyHash", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static BlocksAuthOptions Read(params (string Key, string? Value)[] settings)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(settings.Select(s => new KeyValuePair<string, string?>(s.Key, s.Value)))
+            .Build();
+        var options = new BlocksAuthOptions { BlockCode = "pdf", Permissions = ["pdf:generate"], AdminKeyHash = ValidHash };
+        options.ReadConsoleSettings(configuration);
+        return options;
+    }
+
+    [Fact]
+    public void The_console_session_lasts_twelve_hours_by_default()
+    {
+        var options = Read();
+
+        Assert.Equal(TimeSpan.FromHours(12), options.ConsoleSessionLifetime);
+        Assert.Empty(options.KnownNetworks);
+        Assert.True(new BlocksAuthOptionsValidator().Validate(null, options).Succeeded);
+    }
+
+    [Theory]
+    [InlineData("00:04:59")]
+    [InlineData("1.00:00:01")]
+    [InlineData("a working day")]
+    public void A_session_lifetime_out_of_range_or_unreadable_is_refused_naming_the_setting(string value)
+    {
+        var result = new BlocksAuthOptionsValidator().Validate(null, Read((BlocksAuthOptions.ConsoleSessionLifetimeKey, value)));
+
+        Assert.True(result.Failed);
+        Assert.Contains("Blocks:Console:SessionLifetime", result.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("00:05:00")]
+    [InlineData("08:00:00")]
+    [InlineData("1.00:00:00")]
+    public void A_session_lifetime_from_five_minutes_to_a_day_is_accepted(string value)
+    {
+        Assert.True(new BlocksAuthOptionsValidator().Validate(null, Read((BlocksAuthOptions.ConsoleSessionLifetimeKey, value))).Succeeded);
+    }
+
+    [Fact]
+    public void Known_networks_are_comma_separated_cidrs()
+    {
+        var options = Read((BlocksAuthOptions.KnownNetworksKey, "172.16.0.0/12, 10.0.0.0/8"));
+
+        Assert.Equal(2, options.KnownNetworks.Count);
+        Assert.True(options.KnownNetworks[0].Contains(System.Net.IPAddress.Parse("172.18.0.5")));
+        Assert.True(new BlocksAuthOptionsValidator().Validate(null, options).Succeeded);
+    }
+
+    [Fact]
+    public void A_known_network_that_is_not_a_cidr_is_refused_naming_the_setting()
+    {
+        var result = new BlocksAuthOptionsValidator().Validate(null, Read((BlocksAuthOptions.KnownNetworksKey, "172.16.0.0/12,not-a-cidr")));
+
+        Assert.True(result.Failed);
+        Assert.Contains("Blocks:ForwardedHeaders:KnownNetworks", result.FailureMessage, StringComparison.Ordinal);
+        Assert.Contains("not-a-cidr", result.FailureMessage, StringComparison.Ordinal);
     }
 }

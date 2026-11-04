@@ -240,4 +240,21 @@ public sealed class ClientAdminEndpointTests
         Assert.DoesNotContain(issued.GetProperty("key").GetString()!, text, StringComparison.Ordinal);
         Assert.DoesNotContain(StudHost.AdminKey, text, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task The_scopes_a_key_can_have_are_listed_in_declaration_order_for_the_operator_only()
+    {
+        await using var host = await StudHost.StartAsync();
+
+        var scopes = await host.Admin().GetFromJsonAsync<JsonElement>("/api/admin/scopes", Ct);
+        Assert.Equal(
+            ["pdf:generate", "pdf:templates:read", "pdf:templates:write"],
+            scopes.GetProperty("items").EnumerateArray().Select(s => s.GetProperty("name").GetString()));
+        Assert.All(scopes.GetProperty("items").EnumerateArray(), s => Assert.False(string.IsNullOrEmpty(s.GetProperty("description").GetString())));
+
+        var key = host.Store.Seed("ecommerce", ["pdf:generate", "pdf:templates:read", "pdf:templates:write"], host.Clock.Now);
+        using var refused = await host.Client(key).GetAsync("/api/admin/scopes", Ct);
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal("AUTH_SCOPE_MISSING", Code(await JsonAsync(refused)));
+    }
 }

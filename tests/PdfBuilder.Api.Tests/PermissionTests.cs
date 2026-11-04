@@ -35,7 +35,10 @@ public sealed class PermissionTests(PostgresFixture postgres)
         ["PUT /api/templates/{templateKey}/draft"] = Write,
         ["POST /api/templates/{templateKey}/publish"] = Write,
         ["DELETE /api/templates/{templateKey}"] = Write,
-        ["POST /api/templates/preview"] = Write
+        ["POST /api/templates/preview"] = Write,
+
+        // 004 contracts/console-session.md: a console session and nothing else, not even the admin key.
+        ["GET /api/console/session/"] = "blocks:console-session"
     };
 
     private static IEnumerable<(string Route, IReadOnlyList<string> Policies, RouteEndpoint Endpoint)> NonAnonymousEndpoints(IServiceProvider services) =>

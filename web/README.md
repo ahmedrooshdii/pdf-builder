@@ -1,13 +1,22 @@
 # PDF Builder — web app
 
-An Angular 22 front end for the service: pick a template, paste or load a JSON payload, submit, and
-watch the job until the PDF is ready to preview and download. Jobs you submit are remembered in the
-browser, since the API has no "list jobs" endpoint and forgets jobs after 24 hours.
+An Angular 22 console for the service: pick a template, paste or load a JSON payload, submit, and
+watch the job until the PDF is ready to preview and download; author templates; and manage clients
+and their API keys. Jobs you submit are remembered in the browser, since the API has no "list jobs"
+endpoint yet and forgets jobs after 24 hours.
 
-> **Refused by the API until console sign-in ships.** Every `/api` call now needs an `X-Api-Key`
-> (see [API keys](../README.md#api-keys)), and this app sends none, so its calls answer
-> `401 AUTH_REQUIRED`. Signing in with the admin key arrives with feature 004, which is released
-> together with API keys. Nothing in the app changed for this.
+**Signing in.** The console shows nothing until the operator signs in with the **admin key** (for
+the local stack, the one written beside its hash in [compose.yaml](../compose.yaml)). The key is sent
+once and never kept by the browser; the session lives in an `HttpOnly` cookie the app cannot read,
+lasts 12 hours from sign-in, and ends on **Sign out** in the header. The cookie is `Secure` and
+`SameSite=Strict`, so the console must be served from the same site as the API and over HTTPS
+(plain HTTP works on `localhost` only). See [operations.md](../docs/operations.md#console-sign-in).
+
+**Working within a client.** The switcher in the header chooses the client every page works on. It
+is in the address (`?client=ecommerce`), so a copied link opens on the same client, and the browser
+remembers the last choice. Every request carries it as `X-Client-Id`. **API keys** lists the chosen
+client's keys with when each was last used, creates one (shown once, in a dialog that cannot be
+dismissed by accident) and revokes with confirmation. **Clients** adds, disables and enables clients.
 
 ## Running it
 
@@ -38,13 +47,16 @@ http://localhost:4200 through nginx, which does the same proxying.
 ```
 src/app/
   core/                     app-wide plumbing, no feature knowledge
-    http/                   API_BASE_URL token, ProblemDetails normalisation
+    auth/                   SessionService, signedIn guard, safe return URL, redirect to sign-in
+    client-context/         ClientContext: the chosen client (URL first, then remembered, then the only one)
+    http/                   API_BASE_URL token, ProblemDetails normalisation, console interceptor
     storage/                BROWSER_STORAGE token (null-safe localStorage)
-    layout/                 logo, title strategy, not-found page
+    layout/                 shell (header, client switcher, session menu), logo, title strategy, not-found
     routing/                unsaved-changes guard
     theme/                  light/dark service and toggle
   shared/                   reusable, feature-agnostic building blocks
-    data-access/            APIs more than one feature needs (templates)
+    data-access/            APIs more than one feature needs (templates, clients)
+    testing/                jsdom stand-ins for <dialog> and popover, for specs only
     ui/  pipes/  util/
   features/
     pdf-jobs/               New PDF, Jobs table, job detail
@@ -53,14 +65,25 @@ src/app/
       feature/              routed pages: wire data-access to ui
       ui/                   presentational components: inputs in, outputs out
     templates/              template list and editor (drafts, publish, live preview)
+    console/                the pages every block's console shares
+      auth/                 sign-in page
+      api-keys/             keys of the chosen client: list, create and reveal once, revoke
+      clients/              clients: list, add, disable, enable
 ```
+
+**The console interceptor** ([console.interceptor.ts](src/app/core/http/console.interceptor.ts)) does
+three things for every feature: it adds `X-Console: 1` to every API request (the API's defence against
+other sites using the session), adds `X-Client-Id` for the chosen client to everything except
+`/api/admin/` and `/api/console/`, and on a `401` marks the session signed out and goes to sign-in
+with the current address as `returnUrl`, so unsaved-changes guards still get to ask.
 
 **The layering is enforced by ESLint, not just described here** ([eslint.config.js](eslint.config.js)):
 
 - `core` and `shared` may not import from any feature.
 - `ui` components may not use `HttpClient`, services or stores — only models from `data-access`.
 - `data-access` may not import from `ui` or `feature`.
-- One feature may not import from another. Code two features need moves to `shared`.
+- One feature may not import from another. Code two features need moves to `shared`. The pages under
+  `features/console/` count as separate features (`console/api-keys`, `console/clients`, …).
 
 ### Adding a feature
 
@@ -75,7 +98,7 @@ It is lazy-loaded, so it adds nothing to the initial bundle.
 
 [src/app/shared/ui/](src/app/shared/ui/) holds the design system: Angular ports of shadcn/ui's
 `base-nova` style (Button, Badge, Input, Table, Checkbox, Switch, Code Block, Trace, Hover Card,
-Progress, Skeleton, Scroll Area, Dialog), with the same Tailwind class strings as the shadcn
+Progress, Skeleton, Scroll Area, Dialog, Alert Dialog, Dropdown Menu), with the same Tailwind class strings as the shadcn
 registry. They live in the repository on purpose, as shadcn intends, so change them freely.
 
 - Tokens are in [styles.css](src/styles.css); shadcn's own utilities (`shimmer`, `scroll-fade-*`, the

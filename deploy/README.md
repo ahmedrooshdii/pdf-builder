@@ -164,6 +164,13 @@ Point the domain's A record at the VM's public IP first, or the certificate requ
 > Without a proxy you would be serving the API over plain HTTP, and `/files/{fileId}` URLs are
 > bearer tokens — anyone who can read the traffic can fetch the document.
 
+**If you serve the web console too**, serve it from the same site as the API (one origin, the
+console's nginx forwarding `/api` as `web/nginx/` does) and over HTTPS: its session cookie is
+`Secure` and `SameSite=Strict`. Tell the API which proxy to believe for the browser's address, or
+the sign-in limit (5 failures a minute per address) counts every browser as the proxy: set
+`Blocks__ForwardedHeaders__KnownNetworks` in `deploy/compose.prod.yaml` to the network the proxy
+reaches the API from (Caddy on the host reaching `127.0.0.1` needs nothing; loopback is trusted).
+
 ## 8. Add the repository secrets
 
 **Settings → Secrets and variables → Actions**, and because the workflow uses a `production`

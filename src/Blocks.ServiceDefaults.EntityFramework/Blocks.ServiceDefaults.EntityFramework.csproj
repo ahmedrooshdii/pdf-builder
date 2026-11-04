@@ -1,10 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The clients and api_keys tables, added to a block's own DbContext, and the store over them.
+    The clients, api_keys, console_sessions and data_protection_keys tables, added to a block's own
+    DbContext, and the stores over them.
     Separate from Blocks.ServiceDefaults so that a project wanting only the handler does not take EF.
   -->
   <ItemGroup>
+    <!-- Data Protection's key repository interface comes from the shared framework, not a package. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\Blocks.ServiceDefaults\Blocks.ServiceDefaults.csproj" />
   </ItemGroup>
 

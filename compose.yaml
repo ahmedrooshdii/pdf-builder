@@ -54,6 +54,9 @@ services:
       # Anyone can read it here, so never use it anywhere else. For a real deployment, generate your
       # own with `dotnet run --project tools/Blocks.Cli -- admin-key`.
       Blocks__Admin__KeyHash: 19b2a63852aac00e2726b5c674e18caea07ca8351be2846e160027204facc5fa
+      # nginx in the web container forwards the browser's address. Believe it only from Docker's own
+      # networks (its default address pools), so the console's sign-in limit counts each browser apart.
+      Blocks__ForwardedHeaders__KnownNetworks: 172.16.0.0/12,192.168.0.0/16
     volumes:
       - pdf-data:/data
       # Edit a template on the host and the next render picks it up, no rebuild needed.

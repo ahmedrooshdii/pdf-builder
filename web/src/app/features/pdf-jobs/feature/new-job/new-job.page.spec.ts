@@ -1,9 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { Component, input, model, output } from '@angular/core';
+import { Component, input, model, output, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormValueControl } from '@angular/forms/signals';
 import { Router, provideRouter } from '@angular/router';
+import { ClientContext } from '../../../../core/client-context/client-context';
 import { CodeEditor } from '../../../../shared/ui/code-editor/code-editor';
 import { JobHistoryStore } from '../../data-access/job-history.store';
 import { NewJobPage } from './new-job.page';
@@ -26,7 +27,12 @@ class FakeCodeEditor implements FormValueControl<string> {
 
 function setup() {
   TestBed.configureTestingModule({
-    providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    providers: [
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      provideRouter([]),
+      { provide: ClientContext, useValue: { current: signal('ecommerce') } },
+    ],
   });
   TestBed.overrideComponent(NewJobPage, { remove: { imports: [CodeEditor] }, add: { imports: [FakeCodeEditor] } });
 

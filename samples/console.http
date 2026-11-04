@@ -1,0 +1,56 @@
+# PDF Builder — the console's sign-in, session and sign-out, by hand.
+# VS Code: install the "REST Client" extension, then click "Send Request" above any block.
+# Rider and Visual Studio open .http files natively.
+#
+# The console does all of this itself; these requests show what it sends. @adminKey is the published,
+# local-only key that compose.yaml is configured with: it works against `docker compose up` and nowhere
+# else. Set @host to 8080 when running under Docker.
+#
+# The session cookie is Secure. Clients that follow browser rules will not send it over plain HTTP to
+# anything but localhost.
+
+@host = http://localhost:5052
+@adminKey = adm_lPQ25ykvuTW7HdOJLaJzfqnJsT4cKQfwwR5pgq4o
+
+
+### Sign in — 204 and Set-Cookie: blocks.pdf.console=…; HttpOnly; Secure; SameSite=Strict.
+# Without X-Console: 1 the answer is 403 CONSOLE_HEADER_REQUIRED. A wrong key is 401 AUTH_INVALID_KEY;
+# the sixth failure in a minute from one address is 429 RATE_LIMITED.
+POST {{host}}/api/console/session
+X-Console: 1
+Content-Type: application/json
+
+{ "adminKey": "{{adminKey}}" }
+
+
+### When the session ends — 200 { "expiresAt": … }. The admin key in X-Api-Key is not a session: 401.
+GET {{host}}/api/console/session
+
+
+### A change made with the session must carry X-Console: 1 — this one does.
+POST {{host}}/api/admin/clients
+X-Console: 1
+Content-Type: application/json
+
+{ "id": "ecommerce", "name": "E-commerce" }
+
+
+### The same change without the header — 403 CONSOLE_HEADER_REQUIRED, nothing is created.
+POST {{host}}/api/admin/clients
+Content-Type: application/json
+
+{ "id": "erp", "name": "ERP" }
+
+
+### Acting as a client: X-Client-Id is honoured for the operator only (the session or the admin key).
+GET {{host}}/api/templates
+X-Client-Id: ecommerce
+
+
+### The permissions a key can be given, with what each allows.
+GET {{host}}/api/admin/scopes
+
+
+### Sign out — 204; the cookie is cleared and a copy of it is refused on every instance from now on.
+DELETE {{host}}/api/console/session
+X-Console: 1

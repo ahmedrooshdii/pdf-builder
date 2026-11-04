@@ -71,6 +71,8 @@ public static class DependencyInjection
 
             services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(connectionString));
             services.AddBlocksClientStore<PdfBuilderDbContext>();
+            services.AddBlocksConsoleSessionStore<PdfBuilderDbContext>();
+            services.AddBlocksDataProtection<PdfBuilderDbContext>();
 
             services.AddScoped<TemplateImporter>();
             services.AddHostedService<DatabaseStartup>();

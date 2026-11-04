@@ -64,6 +64,12 @@ missing or invalid key. Set `@apiKey` at the top first.
 The management calls, in order: register a client, issue keys, list them, revoke one, disable and
 enable the client, and the refusals. Every one needs the admin key in `@adminKey`.
 
+## console.http
+
+What the console sends: sign in with the admin key (`X-Console: 1`), read when the session ends, a
+change with and without the console header, acting as a client with `X-Client-Id`, the permission
+list, and sign-out. The console does all of this itself; this file is for seeing the answers.
+
 ## curl
 
 ```bash

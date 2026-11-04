@@ -90,6 +90,15 @@ every instance within a minute. Failures are classified in the handler and answe
 (`AUTH_REQUIRED`, `AUTH_INVALID_KEY`, `CLIENT_DISABLED`, `AUTH_SCOPE_MISSING`, or
 `STORAGE_UNAVAILABLE` when the key cannot be checked). An outage is never reported as a bad key.
 
+There are two ways in, behind one `Blocks` scheme that picks between them: `X-Api-Key` (a product's
+key or the admin key) always wins; a request carrying only the console's cookie goes to the
+`ConsoleSession` scheme. A session has exactly the admin key's authority. Its cookie is checked on
+every request against a `console_sessions` row keyed by a hash of an id only the cookie carries, so
+signing out or replacing the admin key ends it on every instance at once; the cookie's key ring is in
+`data_protection_keys` so every instance can open it. Cookie-authenticated changes must carry
+`X-Console: 1` (the CSRF defence). The operator, by key or session, can act as a client with
+`X-Client-Id`; for everyone else that header is ignored.
+
 Code below the handler reads the caller only through `ICurrentClient` (constitution Principle VI).
 In this release that is the log scope; the data is not yet separated per client (feature 003).
 The message bus is unchanged: publishers are trusted through their broker credentials.
