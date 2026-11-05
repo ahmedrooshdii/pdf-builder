@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -21,6 +22,7 @@ public sealed class DatabaseHealthCheckTests(PostgresFixture postgres)
 
         return new ServiceCollection()
             .AddLogging()
+            .AddScoped<ICurrentClient>(_ => new FixedCurrentClient())   // the context needs a caller; the service registers its own
             .AddInfrastructure(configuration)
             .BuildServiceProvider();
     }

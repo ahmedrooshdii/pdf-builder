@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 using Blocks.ServiceDefaults.Authentication;
 using Microsoft.AspNetCore.Http;
 
@@ -35,9 +34,6 @@ internal sealed partial class HttpCurrentClient(IHttpContextAccessor accessor) :
             ? values[0]
             : null;
 
-    /// <summary>The client id rule of the management API: <c>^[a-z][a-z0-9-]{0,39}$</c>.</summary>
-    internal static bool IsClientId(string? value) => value is not null && ClientIdPattern().IsMatch(value);
-
-    [GeneratedRegex("^[a-z][a-z0-9-]{0,39}$", RegexOptions.CultureInvariant)]
-    private static partial Regex ClientIdPattern();
+    /// <summary>The client id rule of the management API, in <see cref="ClientIds"/>.</summary>
+    internal static bool IsClientId(string? value) => ClientIds.IsValid(value);
 }

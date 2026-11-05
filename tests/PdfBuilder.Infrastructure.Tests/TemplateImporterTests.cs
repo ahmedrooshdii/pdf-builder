@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -61,11 +62,29 @@ public sealed class TemplateImporterTests(PostgresFixture postgres) : IDisposabl
         return source;
     }
 
-    private TemplateImporter Importer(params string[] builtInKeys) => new(
-        Options.Create(new TemplateStoreOptions { RootPath = "unused", AuthoredRootPath = _root }),
-        BuiltIns(builtInKeys),
-        new TestClock(Now),
-        NullLogger<TemplateImporter>.Instance);
+    /// <summary>The importer as the service builds it, with the default client the deployment names (alpha unless a test says otherwise).</summary>
+    private TemplateImporter Importer(params string[] builtInKeys) => Importer(defaultClientId: "alpha", builtInKeys);
+
+    private TemplateImporter Importer(string? defaultClientId, params string[] builtInKeys)
+    {
+        var clock = new TestClock(Now);
+        var owner = new ClientOwnerAssignment(
+            Options.Create(new BlocksBusOptions { DefaultClientId = defaultClientId }), clock, NullLogger<ClientOwnerAssignment>.Instance);
+
+        return new TemplateImporter(
+            Options.Create(new TemplateStoreOptions { RootPath = "unused", AuthoredRootPath = _root }),
+            BuiltIns(builtInKeys),
+            owner,
+            clock,
+            NullLogger<TemplateImporter>.Instance);
+    }
+
+    /// <summary>The authored-template store for client alpha, which owns what these tests import.</summary>
+    private static EfAuthoredTemplateStore StoreFor(TestDatabase database, string clientId = "alpha")
+    {
+        var caller = new FixedCurrentClient(clientId);
+        return new EfAuthoredTemplateStore(database.CreateContext(caller), new ClientScope(caller));
+    }
 
     private static async Task RunAsync(TemplateImporter importer, TestDatabase database)
     {
@@ -80,7 +99,7 @@ public sealed class TemplateImporterTests(PostgresFixture postgres) : IDisposabl
     }
 
     private static async Task<IReadOnlyList<string>> KeysAsync(TestDatabase database) =>
-        [.. (await new EfAuthoredTemplateStore(database.CreateContext()).ListAsync(Ct)).Select(t => t.Key)];
+        [.. (await StoreFor(database).ListAsync(Ct)).Select(t => t.Key)];
 
     [Fact]
     public async Task The_first_run_imports_every_readable_file_and_reports_the_rest()
@@ -94,7 +113,7 @@ public sealed class TemplateImporterTests(PostgresFixture postgres) : IDisposabl
         await RunAsync(Importer(), database);
 
         Assert.Equal(["letter", "receipt"], await KeysAsync(database));
-        var letter = await new EfAuthoredTemplateStore(database.CreateContext()).GetAsync("letter", Ct);
+        var letter = await StoreFor(database).GetAsync("letter", Ct);
         Assert.Equal(TemplateStatus.Published, letter!.Status);
         Assert.Equal(2, letter.Revision);
 
@@ -131,7 +150,7 @@ public sealed class TemplateImporterTests(PostgresFixture postgres) : IDisposabl
         await RunAsync(Importer(), database);
 
         // After the upgrade the operator deletes the template and someone drops a new file in the old place.
-        await new EfAuthoredTemplateStore(database.CreateContext()).DeleteAsync("letter", Ct);
+        await StoreFor(database).DeleteAsync("letter", Ct);
         Write("late.json", Template("late"));
         await RunAsync(Importer(), database);
 
@@ -189,5 +208,68 @@ public sealed class TemplateImporterTests(PostgresFixture postgres) : IDisposabl
 
         Assert.Equal(12, (await KeysAsync(database)).Count);
         Assert.Equal(12, (await ImportRecordAsync(database))!.ImportedCount);
+    }
+
+    // ---- Feature 003: imported templates belong to the default client ---------------------------------
+
+    [Fact]
+    public async Task Imported_templates_are_owned_by_the_default_client_which_is_registered_when_it_is_new()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        Write("letter.json", Template("letter", published: true));
+        Write("receipt.json", Template("receipt"));
+
+        await RunAsync(Importer(defaultClientId: "legacy"), database);
+
+        Assert.Equal(["letter", "receipt"], [.. (await StoreFor(database, "legacy").ListAsync(Ct)).Select(t => t.Key)]);
+        Assert.Empty(await StoreFor(database, "alpha").ListAsync(Ct));
+
+        await using var connection = new Npgsql.NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync(Ct);
+        await using var command = new Npgsql.NpgsqlCommand("SELECT id || ':' || name FROM clients", connection);
+        Assert.Equal("legacy:legacy", (string?)await command.ExecuteScalarAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Files_to_import_and_no_default_client_stop_the_import_before_anything_is_written()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        Write("letter.json", Template("letter"));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(Importer(defaultClientId: null), database));
+
+        Assert.Equal(ClientOwnerAssignment.MissingSetting, error.Message);
+        Assert.Null(await ImportRecordAsync(database));              // not marked done: the next start imports them
+        Assert.Empty(await StoreFor(database, "alpha").ListAsync(Ct));
+
+        // The operator sets the client and starts again: now they come in.
+        await RunAsync(Importer(defaultClientId: "alpha"), database);
+        Assert.Equal(["letter"], await KeysAsync(database));
+    }
+
+    [Fact]
+    public async Task An_import_with_nothing_to_give_an_owner_never_asks_for_one()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        Write("Invoice.json", Template("Invoice"));      // skipped: a built-in template has the key
+        Write("broken.json", "{");                        // skipped: not a template
+
+        await RunAsync(Importer(defaultClientId: null, "invoice"), database);
+
+        Assert.Equal(0, (await ImportRecordAsync(database))!.ImportedCount);
+    }
+
+    [Fact]
+    public async Task A_fresh_install_with_no_old_files_and_no_default_client_imports_nothing_and_succeeds()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+
+        await RunAsync(Importer(defaultClientId: null), database);
+
+        Assert.Equal(0, (await ImportRecordAsync(database))!.ImportedCount);
     }
 }

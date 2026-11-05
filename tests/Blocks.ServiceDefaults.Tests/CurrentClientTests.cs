@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Blocks.ServiceDefaults.Identity;
 using Blocks.ServiceDefaults.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Blocks.ServiceDefaults.Tests;
 
@@ -144,5 +146,113 @@ public sealed class CurrentClientTests
         var line = Assert.Single(host.Logs.Entries, e => e.Message == "generating");
         Assert.Equal(true, line.Scope["Admin"]);
         Assert.Equal("ecommerce", line.Scope["ClientId"]);
+    }
+
+    // ---- IClientContext.ActAs: work that does not come from an HTTP request (research R5) ----
+
+    private static (IServiceScope Scope, ICurrentClient Current, IClientContext Context) ScopeWith(
+        StudHost host, params System.Security.Claims.Claim[] claims)
+    {
+        var scope = host.Services.CreateScope();
+        if (claims.Length > 0)
+            scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Http.IHttpContextAccessor>().HttpContext =
+                new Microsoft.AspNetCore.Http.DefaultHttpContext
+                {
+                    User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, "test"))
+                };
+
+        return (scope, scope.ServiceProvider.GetRequiredService<ICurrentClient>(), scope.ServiceProvider.GetRequiredService<IClientContext>());
+    }
+
+    [Fact]
+    public async Task Without_act_as_the_caller_is_the_http_caller()
+    {
+        await using var host = await StudHost.StartAsync();
+        var (scope, current, _) = ScopeWith(host,
+            new System.Security.Claims.Claim(Authentication.BlocksClaims.ClientId, "ecommerce"),
+            new System.Security.Claims.Claim(Authentication.BlocksClaims.Scope, "pdf:generate"));
+        using var _ = scope;
+
+        Assert.Equal("ecommerce", current.ClientId);
+        Assert.Equal(["pdf:generate"], current.Scopes);
+        Assert.False(current.IsAdmin);
+    }
+
+    [Fact]
+    public async Task Without_a_request_or_act_as_there_is_no_client()
+    {
+        await using var host = await StudHost.StartAsync();
+        var (scope, current, _) = ScopeWith(host);
+        using var _ = scope;
+
+        Assert.Null(current.ClientId);
+        Assert.Empty(current.Scopes);
+        Assert.False(current.IsAdmin);
+    }
+
+    [Fact]
+    public async Task After_act_as_the_caller_is_that_client_with_no_permissions_and_not_the_operator()
+    {
+        await using var host = await StudHost.StartAsync();
+        var (scope, current, context) = ScopeWith(host,
+            new System.Security.Claims.Claim(Authentication.BlocksClaims.Scope, Authentication.BlocksClaims.AdminScope),
+            new System.Security.Claims.Claim(Authentication.BlocksClaims.KeyId, "k7f2a9c1"));
+        using var _ = scope;
+
+        context.ActAs("erp");
+
+        Assert.Equal("erp", current.ClientId);
+        Assert.Null(current.KeyId);
+        Assert.Empty(current.Scopes);
+        Assert.False(current.IsAdmin);
+    }
+
+    [Fact]
+    public async Task Both_interfaces_in_one_scope_are_the_same_instance()
+    {
+        await using var host = await StudHost.StartAsync();
+        var (scope, current, context) = ScopeWith(host);
+        using var _ = scope;
+
+        Assert.Same(current, context);
+    }
+
+    [Fact]
+    public async Task An_object_holding_the_caller_from_before_act_as_sees_the_client_set_afterwards()
+    {
+        await using var host = await StudHost.StartAsync();
+        var (scope, current, context) = ScopeWith(host);
+        using var _ = scope;
+        var heldEarly = current;
+
+        context.ActAs("beta");
+
+        Assert.Equal("beta", heldEarly.ClientId);
+    }
+
+    [Theory]
+    [InlineData("Bad_Id")]
+    [InlineData("1shop")]
+    [InlineData("")]
+    public async Task Act_as_refuses_a_malformed_client_id(string clientId)
+    {
+        await using var host = await StudHost.StartAsync();
+        var (scope, _, context) = ScopeWith(host);
+        using var _ = scope;
+
+        Assert.Throws<ArgumentException>(() => context.ActAs(clientId));
+    }
+
+    [Fact]
+    public async Task Act_as_twice_with_another_client_is_refused_and_with_the_same_client_is_fine()
+    {
+        await using var host = await StudHost.StartAsync();
+        var (scope, current, context) = ScopeWith(host);
+        using var _ = scope;
+
+        context.ActAs("alpha");
+        context.ActAs("alpha");
+        Assert.Throws<InvalidOperationException>(() => context.ActAs("beta"));
+        Assert.Equal("alpha", current.ClientId);
     }
 }

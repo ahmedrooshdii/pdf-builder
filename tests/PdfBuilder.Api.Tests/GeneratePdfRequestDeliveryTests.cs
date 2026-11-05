@@ -78,4 +78,44 @@ public sealed class GeneratePdfRequestDeliveryTests
         Assert.Equal(request.CorrelationId, response.Message.CorrelationId);
         Assert.Single(harness.GetConsumerHarness<CountingConsumer>().Consumed.Select<IGeneratePdfRequest>(TestContext.Current.CancellationToken));
     }
+
+    private static async Task<IGeneratePdfRequest> ConsumedAsync(ITestHarness harness)
+    {
+        await harness.InactivityTask;
+        var consumed = harness.GetConsumerHarness<CountingConsumer>().Consumed
+            .Select<IGeneratePdfRequest>(TestContext.Current.CancellationToken)
+            .ToList();
+        return Assert.Single(consumed).Context.Message;
+    }
+
+    [Fact]
+    public async Task A_request_from_a_publisher_that_predates_the_client_id_arrives_with_none()
+    {
+        // The shape a 1.0.0 or 1.1.0 publisher sends: no ClientId at all. The change to the message is
+        // additive, so it is still delivered, and the service reads the missing member as "the default client".
+        var (provider, harness) = await StartAsync();
+        await using var _ = provider;
+
+        await harness.Bus.Publish<IGeneratePdfRequest>(new
+        {
+            CorrelationId = NewId.NextGuid(),
+            TemplateKey = "invoice",
+            JsonPayload = "{}",
+            PageSetup = (PdfPageSetup?)null
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Null((await ConsumedAsync(harness)).ClientId);
+    }
+
+    [Fact]
+    public async Task A_client_id_set_on_the_ready_made_class_reaches_the_consumer()
+    {
+        var (provider, harness) = await StartAsync();
+        await using var _ = provider;
+
+        await harness.Bus.Publish<IGeneratePdfRequest>(
+            new GeneratePdfRequest(NewId.NextGuid(), "invoice", "{}") { ClientId = "erp" }, TestContext.Current.CancellationToken);
+
+        Assert.Equal("erp", (await ConsumedAsync(harness)).ClientId);
+    }
 }

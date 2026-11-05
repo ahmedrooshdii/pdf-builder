@@ -117,6 +117,15 @@ naming the variable, if it is missing. To replace the key, generate a new one, c
 keys with the calls in [samples/admin.http](../samples/admin.http), **before** pointing any product
 at this version: a product that sends no key is refused.
 
+`DEFAULT_CLIENT_ID` is optional on a new install and required when you upgrade a server that already has
+templates or jobs. Templates and jobs belong to the client that created them, and the ones that exist
+now were created before clients did, so the service needs to be told who they belong to: set it in
+`.env` to the id of the client that uses them (for example `DEFAULT_CLIENT_ID=ecommerce`) **before** you
+deploy. The client is registered for you if it does not exist yet. Without it the service refuses to
+start and the deploy fails its health check, naming the setting, with nothing changed; add the line and
+deploy again. It also names the client that messages published to RabbitMQ without a client id are
+handled for. See [docs/operations.md](../docs/operations.md#upgrading-to-per-client-templates-and-jobs).
+
 `PUBLIC_BASE_URL` must be the address **callers** reach, not the VM's. It is what every `fileUrl`
 is built from, so getting it wrong hands out dead links and nothing fails until someone clicks one.
 

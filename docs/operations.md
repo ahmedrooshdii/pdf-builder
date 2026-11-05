@@ -82,6 +82,53 @@ So, in this order:
 Messages published straight to RabbitMQ are not affected: publishers are trusted through their
 broker credentials, as before.
 
+### Upgrading to per-client templates and jobs
+
+From this version templates and jobs belong to the client that created them. A client sees, uses and changes
+only its own; another client's template key or job id answers `404`, exactly as one that does not exist. The
+built-in templates stay available to every client. The operator, in the console or with the admin key, works
+inside one client at a time (`X-Client-Id`); template and job calls with no client are refused with `400`.
+
+Templates and jobs that already exist were created before clients did, so they need an owner, and only you
+know which product uses them. One step:
+
+1. Choose the client id of the product that uses today's templates (for example `ecommerce`) and set
+   `Blocks:Bus:DefaultClientId` (environment variable `Blocks__Bus__DefaultClientId`) to it
+   ([configuration.md](configuration.md#bus)). The client does not have to be registered first.
+2. Upgrade. On the first start every existing template and job is given to that client, once. If the client
+   is not registered yet it is registered, named by its id: rename it in the console. Drafts, published
+   versions, revisions and timestamps do not change, and neither does what the client renders.
+
+- **Without the setting the service does not start** and says what to fill in: "Templates or jobs from before
+  clients existed need an owner. Set Blocks:Bus:DefaultClientId (environment variable
+  Blocks__Bus__DefaultClientId) to the id of the client that uses them, then start again. Nothing has been
+  changed." Set it and start again; the database is as it was.
+- **A fresh install, or a database with no templates or jobs, needs no setting.**
+- **It happens once.** Starting again, starting a second instance, or changing or removing the setting later
+  moves nothing. Moving a template to another client is not something this version does.
+- **A malformed value stops the service**, whatever the data: the setting must be a client id (a lowercase
+  letter, then lowercase letters, digits or hyphens, at most 40 characters).
+- **The setting has a second meaning**, which is why it is called what it is: messages published straight to
+  RabbitMQ that name no client (every publisher built before this version) are handled for this client. See
+  [message-contracts.md](message-contracts.md#clientid). With it unset, such messages are answered
+  `VALIDATION_FAILED`.
+
+If you apply migrations yourself (`Blocks:Database:MigrateOnStartup` is `false`), the upgrade is three steps,
+because the owner is required only after every row has one:
+
+1. Apply the migration `AddClientOwner`. It adds an empty, optional `client_id` to `authored_templates` and
+   `pdf_jobs` (for example `dotnet ef database update AddClientOwner --project src/PdfBuilder.Infrastructure
+   --startup-project src/PdfBuilder.Api`, or generate it as SQL with `dotnet ef migrations script`).
+2. Run, with your client id:
+
+   ```sql
+   INSERT INTO clients (id, name, created_at) VALUES ('ecommerce', 'ecommerce', now()) ON CONFLICT (id) DO NOTHING;
+   UPDATE authored_templates SET client_id = 'ecommerce' WHERE client_id IS NULL;
+   UPDATE pdf_jobs           SET client_id = 'ecommerce' WHERE client_id IS NULL;
+   ```
+3. Apply the migration `RequireClientOwner`. It makes the owner required, ties it to `clients`, and makes a
+   template key unique per client. If a row still has no owner, it fails and changes nothing.
+
 ## API keys
 
 Each product is a **client** and holds one or more **keys**; the operator holds the **admin key**.
@@ -188,6 +235,10 @@ termination grace period, or rolling deployments will cut jobs off mid-render.
 | A product gets `403 CLIENT_DISABLED` | Its client is disabled | Enable it, if that was not intended |
 | A key with requests answers `503 STORAGE_UNAVAILABLE` | The key could not be checked: the database is unreachable | As above; the product should retry, never treat this as a revoked key |
 | Service will not start, `The database schema is out of date` | `MigrateOnStartup` is `false` and migrations were not applied | Apply the migrations it names, or set it to `true` |
+| Service will not start, `Templates or jobs from before clients existed need an owner` | The database has templates or jobs from before clients, and `Blocks:Bus:DefaultClientId` is not set | [Upgrading to per-client templates and jobs](#upgrading-to-per-client-templates-and-jobs). Nothing has been changed. |
+| A message published to RabbitMQ is answered `VALIDATION_FAILED` with `names no client`, `is not registered` or `already used by another job`, or `CLIENT_DISABLED` | The publisher names no client and there is no default client; names one that does not exist or is disabled; or reuses a `CorrelationId` another client's job has | [message-contracts.md](message-contracts.md#clientid) |
+| A product gets `404` for a template or job it knows exists | It is using another client's key, or the operator has chosen another client | Templates and jobs belong to one client; check the key's client |
+| The console or an admin call gets `400` asking to choose a client | A template or job call without `X-Client-Id` | Choose a client in the console, or send `X-Client-Id` |
 | `_error` queue filling up | Transient failures exhausting retries | Consumer logs for the `CorrelationId` |
 | Service will not start, `License must be specified` | MassTransit bumped back to 9.x | Pin 8.5.x, or set `MT_LICENSE` |
 

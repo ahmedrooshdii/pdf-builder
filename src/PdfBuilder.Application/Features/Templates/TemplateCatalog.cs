@@ -9,6 +9,13 @@ namespace PdfBuilder.Application.Features.Templates;
 /// that ignores case (Windows, macOS) would otherwise turn <c>Invoice</c> and <c>invoice</c> into
 /// one file, and people reading a list would not tell them apart either.
 /// </summary>
+/// <remarks>
+/// Authored templates belong to a client, and the authored store is confined to the caller's own: it is
+/// filtered by client where it is implemented, so nothing here names a client. So "unique" means unique
+/// within the calling client and the built-in templates, two clients can each have a template with the
+/// same key, and another client's key is as good as missing. Built-in templates are shared by every
+/// client and changed by none.
+/// </remarks>
 public sealed class TemplateCatalog(IAuthoredTemplateStore authored, IBuiltInTemplateSource builtIn)
 {
     public async Task<IReadOnlyList<TemplateView>> ListAsync(CancellationToken cancellationToken)

@@ -30,6 +30,12 @@ Templates are either built in (`templates/` in this repository) or written in th
 they start as drafts and are only used by jobs once published. See
 [docs/templates.md](docs/templates.md#two-kinds-of-template).
 
+Templates and jobs belong to the client that created them (the product whose API key made the call).
+A client lists, reads, uses and changes only its own: another client's template key or job id is a
+`404`, exactly as one that does not exist, and two clients can each have a template with the same key.
+The built-in templates are everybody's. See [docs/templates.md](docs/templates.md#two-kinds-of-template)
+and the two-client walk-through in [samples/requests.http](samples/requests.http).
+
 ## Running it
 
 ### With Docker
@@ -75,6 +81,11 @@ dotnet user-secrets --project src/PdfBuilder.Api \
 The schema is created on first start. If you are upgrading from a version that kept templates as
 files, they are imported once, automatically; see
 [operations.md](docs/operations.md#upgrading-from-file-based-templates).
+
+Upgrading from a version without clients? Templates and jobs that exist already have no owner, so set
+`Blocks:Bus:DefaultClientId` to the id of the client that uses them before you start: the service gives
+them to it once, registering it if needed, and refuses to start without it. A new install needs nothing.
+See [operations.md](docs/operations.md#upgrading-to-per-client-templates-and-jobs).
 
 The service also will not start without the hash of an admin key. Generate one; the key is printed
 once, so keep it:

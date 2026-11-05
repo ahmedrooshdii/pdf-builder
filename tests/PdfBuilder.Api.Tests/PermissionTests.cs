@@ -124,14 +124,15 @@ public sealed class PermissionTests(PostgresFixture postgres)
         await using var api = await ApiFactory.StartAsync(postgres);
         using var full = api.ClientWithKey(await api.FullKeyAsync("ecommerce", Ct));
         using var admin = api.AdminClient();
+        using var acting = await api.AdminActingAsAsync("ecommerce", Ct);   // templates and jobs belong to a client
 
         using var refused = await full.GetAsync("/api/admin/clients", Ct);
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
         Assert.Equal("AUTH_SCOPE_MISSING", (await refused.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString());
 
-        Assert.Equal(HttpStatusCode.Accepted, (await admin.PostAsJsonAsync("/api/pdf/jobs", new { templateKey = "invoice", data = new { } }, Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/templates", Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/templates", new { templateKey = "by-admin" }, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await acting.PostAsJsonAsync("/api/pdf/jobs", new { templateKey = "invoice", data = new { } }, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await acting.GetAsync("/api/templates", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await acting.PostAsJsonAsync("/api/templates", new { templateKey = "by-admin" }, Ct)).StatusCode);
     }
 
     private static async Task<string> TemplateRowAsync(ApiFactory api)

@@ -49,6 +49,7 @@ member is then a compile error; with an anonymous object it is silently sent as 
 | `TemplateKey` | `string` | A published template, e.g. `invoice`. Must match `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`. A draft that was never published is reported as `TEMPLATE_NOT_FOUND`. |
 | `JsonPayload` | `string` | A JSON object, serialised as text. Maximum 5 MB, counted in UTF-8 bytes, not characters. |
 | `PageSetup` | `PdfPageSetup?` | Optional. Paper size, orientation or margins for this document only; null keeps the template's. See [PageSetup](#pagesetup). |
+| `ClientId` | `string?` | Optional. The client this job is for, e.g. `ecommerce`; null means the deployment's default client. See [ClientId](#clientid). |
 
 The limits are published as constants in `PdfRequestLimits`, and the service validates against the
 same ones. Check them before sending to save a round trip:
@@ -91,6 +92,42 @@ var request = new GeneratePdfRequest(NewId.NextGuid(), "invoice", json)
 
 Over HTTP it is the same shape, camel-cased, as `pageSetup` on `POST /api/pdf/jobs`.
 
+### ClientId
+
+A request says which client it is for, so it is handled with that client's templates and recorded as that
+client's job. Templates and jobs belong to the client that created them, and another client's are as good as
+missing (see [configuration.md](configuration.md#bus)).
+
+| `ClientId` you send | What the service does |
+| --- | --- |
+| a registered, enabled client, e.g. `ecommerce` | Handles the job for that client. |
+| nothing (`null`) | Handles it for the deployment's **default client**, `Blocks:Bus:DefaultClientId`. This is what a publisher built before this member existed sends, so it keeps working. |
+| nothing, and the deployment has no default client | `VALIDATION_FAILED`, "The message names no client and no default client is configured." |
+| something that is not a client id (`^[a-z][a-z0-9-]{0,39}$`) | `VALIDATION_FAILED`, "ClientId is not a valid client id." |
+| a client that is not registered (also for the default client) | `VALIDATION_FAILED`, "Client '…' is not registered." |
+| a client that is disabled (also for the default client) | `CLIENT_DISABLED` |
+
+In every refused case nothing is rendered and no job is recorded.
+
+- The template is the client's own published template with that key, else the built-in one, else
+  `TEMPLATE_NOT_FOUND`. A client never renders another client's template.
+- A job sent on the bus is recorded as `Pending` as soon as work starts, so the same client can poll
+  `GET /api/pdf/jobs/{CorrelationId}` with its API key. Before this version it appeared only once it finished.
+- **`CorrelationId` must not be one that another client's job already uses.** The service answers
+  `VALIDATION_FAILED`, "CorrelationId is already used by another job; send a new one.", and does not touch or
+  describe that job. Ids you generate with `NewId.NextGuid()` or `Guid.NewGuid()` never collide.
+- Sending the same `CorrelationId` again from the same client behaves as before: it updates its own job.
+
+**Who may name which client.** The service cannot check that a message really comes from the client it
+names: anyone who can publish to the block's exchanges can name any client. Give broker credentials only to
+trusted product backends, each with its own broker user allowed to publish only to the PDF exchanges in the
+block's virtual host. A product that must not be able to read another client's output should be a client of
+the HTTP API, where its key decides the client.
+
+```csharp
+var request = new GeneratePdfRequest(NewId.NextGuid(), "invoice", json) { ClientId = "ecommerce" };
+```
+
 ## IGeneratePdfResponse
 
 | Member | Type | Meaning |
@@ -110,10 +147,11 @@ Follows the Claim Check pattern: the response carries a reference, never the PDF
 
 | `PdfErrorCodes` | Value | Cause |
 | --- | --- | --- |
-| `ValidationFailed` | `VALIDATION_FAILED` | Bad template key, the payload is not a JSON object / too large, or the page setup is malformed. |
+| `ValidationFailed` | `VALIDATION_FAILED` | Bad template key, the payload is not a JSON object / too large, the page setup is malformed, or the client is missing, malformed or not registered, or the `CorrelationId` belongs to another client's job. |
 | `TemplateNotFound` | `TEMPLATE_NOT_FOUND` | No published template under that key (a draft counts as missing). |
 | `TemplateRenderFailed` | `TEMPLATE_RENDER_FAILED` | Template syntax error, or a runtime error while binding data. |
 | `RenderFailed` | `RENDER_FAILED` | The browser failed. Not sent on a response today: see below. |
+| `ClientDisabled` | `CLIENT_DISABLED` | The client the request is for (or the default client) is disabled. Final until the operator enables it. |
 
 Every code that arrives on a response is final: retrying the same message cannot help. Fix the
 request or the template.

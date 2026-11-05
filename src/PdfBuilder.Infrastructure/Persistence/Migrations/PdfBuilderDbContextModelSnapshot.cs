@@ -394,6 +394,11 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("PdfBuilder.Infrastructure.Persistence.Records.AuthoredTemplateRecord", b =>
                 {
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("client_id");
+
                     b.Property<string>("Key")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -430,12 +435,12 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.HasKey("Key")
+                    b.HasKey("ClientId", "Key")
                         .HasName("pk_authored_templates");
 
-                    b.HasIndex("KeyLower")
+                    b.HasIndex("ClientId", "KeyLower")
                         .IsUnique()
-                        .HasDatabaseName("ux_authored_templates_key_lower");
+                        .HasDatabaseName("ux_authored_templates_client_key_lower");
 
                     b.ToTable("authored_templates", (string)null);
                 });
@@ -445,6 +450,12 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid")
                         .HasColumnName("job_id");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("client_id");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
@@ -491,6 +502,9 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
 
                     b.HasKey("JobId")
                         .HasName("pk_pdf_jobs");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("ix_pdf_jobs_client_id");
 
                     b.HasIndex("LastSavedAt")
                         .HasDatabaseName("ix_pdf_jobs_last_saved_at");
@@ -556,6 +570,26 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId")
                         .HasConstraintName("fk_outbox_message_inbox_state_inbox_message_id_inbox_consumer_");
+                });
+
+            modelBuilder.Entity("PdfBuilder.Infrastructure.Persistence.Records.AuthoredTemplateRecord", b =>
+                {
+                    b.HasOne("Blocks.ServiceDefaults.EntityFramework.ClientRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_authored_templates_clients_client_id");
+                });
+
+            modelBuilder.Entity("PdfBuilder.Infrastructure.Persistence.Records.PdfJobRecord", b =>
+                {
+                    b.HasOne("Blocks.ServiceDefaults.EntityFramework.ClientRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pdf_jobs_clients_client_id");
                 });
 #pragma warning restore 612, 618
         }

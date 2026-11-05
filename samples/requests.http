@@ -10,6 +10,10 @@
 # from compose.yaml works too. Health checks and file downloads need no key.
 @apiKey = pdf_paste-your-key-here
 
+# The admin key, only for the last request in this file: the operator acting as a client. Under Docker it is the
+# published local-only one from compose.yaml.
+@adminKey = adm_lPQ25ykvuTW7HdOJLaJzfqnJsT4cKQfwwR5pgq4o
+
 
 ### Liveness — the process is up. Works with no broker.
 GET {{host}}/health/live
@@ -208,3 +212,89 @@ X-Api-Key: pdf_zzzzzzzz_notarealsecret0000000000000000000000
 Content-Type: application/json
 
 { "templateKey": "invoice", "data": {} }
+
+
+### ===== Two clients: templates and jobs belong to the client whose key made them ==================
+# Register two clients, `ecommerce` and `erp`, and issue each a key with all three pdf:* permissions
+# (admin.http), then paste the keys here. Another client's template or job answers 404, exactly as one
+# that does not exist. The built-in templates (`invoice`) are everybody's.
+
+@ecommerceKey = pdf_paste-the-ecommerce-key-here
+@erpKey = pdf_paste-the-erp-key-here
+
+
+### 1. ecommerce creates a template called `statement`...
+POST {{host}}/api/templates
+X-Api-Key: {{ecommerceKey}}
+Content-Type: application/json
+
+{ "templateKey": "statement", "content": { "html": "<p>The ecommerce statement</p>", "css": "", "sampleJson": "{}" } }
+
+
+### ...and publishes it, so jobs can render it.
+POST {{host}}/api/templates/statement/publish
+X-Api-Key: {{ecommerceKey}}
+Content-Type: application/json
+
+{ "revision": 1 }
+
+
+### 2. erp lists templates: no `statement`, but the built-in `invoice` is there.
+GET {{host}}/api/templates
+X-Api-Key: {{erpKey}}
+
+
+### 3. erp reads it: 404 TEMPLATE_NOT_FOUND, the same answer as for a key nobody has.
+GET {{host}}/api/templates/statement
+X-Api-Key: {{erpKey}}
+
+
+### 4. erp creates its own `statement`: 201. The same key, a different template, changed independently.
+POST {{host}}/api/templates
+X-Api-Key: {{erpKey}}
+Content-Type: application/json
+
+{ "templateKey": "statement", "content": { "html": "<p>The erp statement</p>", "css": "", "sampleJson": "{}" } }
+
+
+### ...and publishes it.
+POST {{host}}/api/templates/statement/publish
+X-Api-Key: {{erpKey}}
+Content-Type: application/json
+
+{ "revision": 1 }
+
+
+### 5. Each submits a job for `statement`. Each renders its own client's template.
+# @name ecommerceJob
+POST {{host}}/api/pdf/jobs
+X-Api-Key: {{ecommerceKey}}
+Content-Type: application/json
+
+{ "templateKey": "statement", "data": {} }
+
+
+###
+# @name erpJob
+POST {{host}}/api/pdf/jobs
+X-Api-Key: {{erpKey}}
+Content-Type: application/json
+
+{ "templateKey": "statement", "data": {} }
+
+
+### 6. erp reads ecommerce's job: 404, as for an id nobody issued. ecommerce reads its own as usual.
+GET {{host}}/api/pdf/jobs/{{ecommerceJob.response.body.jobId}}
+X-Api-Key: {{erpKey}}
+
+
+###
+GET {{host}}/api/pdf/jobs/{{ecommerceJob.response.body.jobId}}
+X-Api-Key: {{ecommerceKey}}
+
+
+### The operator works inside one client at a time. With the admin key, say which: no X-Client-Id is a 400
+# asking for one, an unregistered one is 404 CLIENT_NOT_FOUND, and a disabled one still works.
+GET {{host}}/api/templates
+X-Api-Key: {{adminKey}}
+X-Client-Id: ecommerce

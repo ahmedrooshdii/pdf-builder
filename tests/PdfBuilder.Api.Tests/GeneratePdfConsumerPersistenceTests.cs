@@ -1,3 +1,6 @@
+using Blocks.ServiceDefaults;
+using Blocks.ServiceDefaults.EntityFramework;
+using Blocks.ServiceDefaults.Identity;
 using MassTransit;
 using MassTransit.Testing;
 using MediatR;
@@ -26,7 +29,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private sealed record GeneratePdfRequest(Guid CorrelationId, string TemplateKey, string JsonPayload) : IGeneratePdfRequest
+    private sealed record GeneratePdfRequest(Guid CorrelationId, string TemplateKey, string JsonPayload, string? ClientId = null) : IGeneratePdfRequest
     {
         public PdfPageSetup? PageSetup => null;
     }
@@ -40,6 +43,14 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
         services.AddSingleton(Options.Create(new JobStoreOptions()));
         services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(connectionString));
         services.AddScoped<IPdfJobStore, EfPdfJobStore>();
+
+        // What the stud registers for a block: one caller per scope, which the consumer sets from the message.
+        services.AddScoped<FixedCurrentClient>();
+        services.AddScoped<ICurrentClient>(provider => provider.GetRequiredService<FixedCurrentClient>());
+        services.AddScoped<IClientContext>(provider => provider.GetRequiredService<FixedCurrentClient>());
+        services.AddScoped<ClientScope>();
+        services.AddBlocksClientStore<PdfBuilderDbContext>();   // the consumer checks that the client exists and is enabled
+        services.AddSingleton(Options.Create(new BlocksBusOptions { DefaultClientId = "alpha" }));
 
         services.AddMassTransitTestHarness(x =>
         {
@@ -57,12 +68,14 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
     private static async Task<PdfJob?> ReadAsync(ServiceProvider provider, Guid jobId)
     {
         await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IClientContext>().ActAs("alpha");
         return await scope.ServiceProvider.GetRequiredService<IPdfJobStore>().GetAsync(jobId, Ct);
     }
 
     private static async Task SaveAsync(ServiceProvider provider, PdfJob job)
     {
         await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IClientContext>().ActAs("alpha");
         await scope.ServiceProvider.GetRequiredService<IPdfJobStore>().SaveAsync(job, Ct);
     }
 
@@ -70,7 +83,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
     {
         var harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
-        await harness.Bus.Publish<IGeneratePdfRequest>(new GeneratePdfRequest(jobId, "invoice", "{}"), Ct);
+        await harness.Bus.Publish<IGeneratePdfRequest>(new GeneratePdfRequest(jobId, "invoice", "{}", "alpha"), Ct);
         Assert.True(await harness.GetConsumerHarness<GeneratePdfConsumer>().Consumed.Any<IGeneratePdfRequest>(Ct));
     }
 
@@ -79,6 +92,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         var sender = Substitute.For<ISender>();
         sender.Send(Arg.Any<GeneratePdfCommand>(), Arg.Any<CancellationToken>())
             .Returns(new GeneratePdfResult("a7e0495b2cd24ed9bb65b1b0f3a14c20", "http://x/files/a7e0495b2cd24ed9bb65b1b0f3a14c20", 2048));
@@ -99,6 +113,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         var sender = Substitute.For<ISender>();
         sender.Send(Arg.Any<GeneratePdfCommand>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new TemplateNotFoundException("invoice"));
@@ -119,6 +134,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
         // No HTTP endpoint was involved, so there is no pending row; the consumer creates the record.
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         var sender = Substitute.For<ISender>();
         sender.Send(Arg.Any<GeneratePdfCommand>(), Arg.Any<CancellationToken>())
             .Returns(new GeneratePdfResult("f1", "http://x/files/f1", 1));

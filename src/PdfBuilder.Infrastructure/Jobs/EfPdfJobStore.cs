@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using PdfBuilder.Application.Abstractions;
+using PdfBuilder.Domain.Exceptions;
 using PdfBuilder.Domain.Jobs;
 using PdfBuilder.Infrastructure.Persistence;
 using PdfBuilder.Infrastructure.Persistence.Records;
@@ -23,15 +24,20 @@ namespace PdfBuilder.Infrastructure.Jobs;
 /// <c>SaveChanges</c>. That is deliberate: when a message was published through the bus outbox in
 /// the same scope, the outbox row and the job row are written by that one call, in one transaction.
 /// </para>
+/// <para>
+/// A job belongs to the client that submitted it. The context's <c>"client"</c> query filter confines
+/// every read here to the caller's own jobs, so another client's job id answers as if it never existed.
+/// </para>
 /// </remarks>
 public sealed class EfPdfJobStore(
     PdfBuilderDbContext db,
+    ClientScope scope,
     TimeProvider clock,
     IOptions<JobStoreOptions> options) : IPdfJobStore
 {
     public async Task SaveAsync(PdfJob job, CancellationToken cancellationToken = default)
     {
-        var record = PdfJobRecord.From(job, clock.GetUtcNow());
+        var record = PdfJobRecord.From(job, scope.RequireClientId(), clock.GetUtcNow());
         var jobs = db.Set<PdfJobRecord>();
 
         var existing = await jobs.FindAsync([job.JobId], cancellationToken);
@@ -50,11 +56,44 @@ public sealed class EfPdfJobStore(
             // happen to a job that never went through the HTTP endpoint. Keep the newer state.
             db.Entry(record).State = EntityState.Detached;
             var winner = await jobs.FindAsync([job.JobId], cancellationToken);
+
+            // The id exists, but this caller cannot see it: it is another client's job. Say so, rather than
+            // rethrowing a database error, which the consumer would take for a transient fault and retry.
             if (winner is null)
-                throw;
+                throw new JobIdTakenException();
 
             winner.CopyFrom(record);
             await db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    public async Task<PdfJob> ClaimAsync(Guid jobId, string templateKey, CancellationToken cancellationToken = default)
+    {
+        var jobs = db.Set<PdfJobRecord>();
+
+        // The caller's own job with this id, however old: the retention cut-off belongs to reads for
+        // callers, and a job that is being worked on again must not be mistaken for someone else's.
+        var own = await jobs.AsNoTracking().FirstOrDefaultAsync(j => j.JobId == jobId, cancellationToken);
+        if (own is not null)
+            return own.ToDomain();
+
+        var now = clock.GetUtcNow();
+        var record = PdfJobRecord.From(PdfJob.Enqueued(jobId, templateKey, now), scope.RequireClientId(), now);
+        jobs.Add(record);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return record.ToDomain();
+        }
+        catch (DbUpdateException exception) when (IsDuplicateKey(exception))
+        {
+            db.Entry(record).State = EntityState.Detached;
+
+            // The id is taken. By this caller, through another instance that got there first: fine, it is its job.
+            // By anyone else: the caller-filtered read cannot see it, and nothing about it is read or reported.
+            var winner = await jobs.AsNoTracking().FirstOrDefaultAsync(j => j.JobId == jobId, cancellationToken);
+            return winner is null ? throw new JobIdTakenException() : winner.ToDomain();
         }
     }
 

@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PdfBuilder.Application;
@@ -43,9 +44,22 @@ public sealed class MultiInstanceTests(PostgresFixture postgres) : IDisposable
         return new ServiceCollection()
             .AddLogging()
             .AddSingleton(TimeProvider.System)
+
+            // What the stud registers for a block: one caller per scope, which each scope below sets.
+            .AddScoped<FixedCurrentClient>()
+            .AddScoped<ICurrentClient>(provider => provider.GetRequiredService<FixedCurrentClient>())
+            .AddScoped<IClientContext>(provider => provider.GetRequiredService<FixedCurrentClient>())
             .AddApplication()
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);
+    }
+
+    /// <summary>A scope of one instance, acting as client alpha, which owns everything these tests write.</summary>
+    private static AsyncServiceScope ActingScope(ServiceProvider instance)
+    {
+        var scope = instance.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IClientContext>().ActAs("alpha");
+        return scope;
     }
 
     [Fact]
@@ -53,25 +67,26 @@ public sealed class MultiInstanceTests(PostgresFixture postgres) : IDisposable
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         await using var instanceA = Instance(database, "a");
         await using var instanceB = Instance(database, "b");
         var jobId = Guid.NewGuid();
 
-        await using (var scope = instanceA.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceA))
             await scope.ServiceProvider.GetRequiredService<IPdfJobStore>().SaveAsync(PdfJob.Enqueued(jobId, "invoice", Now), Ct);
 
-        await using (var scope = instanceB.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceB))
         {
             var seenByB = await scope.ServiceProvider.GetRequiredService<IPdfJobStore>().GetAsync(jobId, Ct);
             Assert.Equal(PdfJobStatus.Pending, seenByB!.Status);
         }
 
         // B's worker finishes it; A, polled next, reports the result.
-        await using (var scope = instanceB.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceB))
             await scope.ServiceProvider.GetRequiredService<IPdfJobStore>()
                 .SaveAsync(PdfJob.Enqueued(jobId, "invoice", Now).Succeed("f1", "http://b.test/files/f1", 2048, Now.AddSeconds(2)), Ct);
 
-        await using (var scope = instanceA.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceA))
         {
             var seenByA = await scope.ServiceProvider.GetRequiredService<IPdfJobStore>().GetAsync(jobId, Ct);
             Assert.Equal(PdfJobStatus.Succeeded, seenByA!.Status);
@@ -84,32 +99,33 @@ public sealed class MultiInstanceTests(PostgresFixture postgres) : IDisposable
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         await using var instanceA = Instance(database, "a");
         await using var instanceB = Instance(database, "b");
 
         var options = PdfRenderOptions.Default;
         var draft = AuthoredTemplate.Create("letter", new TemplateContent("<p>v1</p>", "", "{}", options), Now);
 
-        await using (var scope = instanceA.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceA))
         {
             var store = scope.ServiceProvider.GetRequiredService<IAuthoredTemplateStore>();
             await store.AddAsync(draft, Ct);
 
             // Nothing is published yet, so jobs on the other instance cannot use it.
-            await using var other = instanceB.CreateAsyncScope();
+            await using var other = ActingScope(instanceB);
             Assert.Null(await other.ServiceProvider.GetRequiredService<IPdfTemplateRepository>().GetByKeyAsync("letter", Ct));
 
             await store.UpdateAsync(draft.Publish(1, Now), 1, Ct);
         }
 
-        await using (var scope = instanceB.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceB))
         {
             var rendered = await scope.ServiceProvider.GetRequiredService<IPdfTemplateRepository>().GetByKeyAsync("letter", Ct);
             Assert.Contains("v1", rendered!.Html, StringComparison.Ordinal);
         }
 
         // An edit published through B replaces what A renders.
-        await using (var scope = instanceB.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceB))
         {
             var store = scope.ServiceProvider.GetRequiredService<IAuthoredTemplateStore>();
             var current = (await store.GetAsync("letter", Ct))!;
@@ -118,7 +134,7 @@ public sealed class MultiInstanceTests(PostgresFixture postgres) : IDisposable
             await store.UpdateAsync(edited, current.Revision, Ct);
         }
 
-        await using (var scope = instanceA.CreateAsyncScope())
+        await using (var scope = ActingScope(instanceA))
         {
             var rendered = await scope.ServiceProvider.GetRequiredService<IPdfTemplateRepository>().GetByKeyAsync("letter", Ct);
             Assert.Contains("v2", rendered!.Html, StringComparison.Ordinal);

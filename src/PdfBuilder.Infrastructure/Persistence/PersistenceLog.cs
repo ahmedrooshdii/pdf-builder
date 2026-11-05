@@ -46,4 +46,16 @@ internal static partial class PersistenceLog
         Level = LogLevel.Warning,
         Message = "Retention sweep failed; it will try again next hour")]
     public static partial void JobSweepFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(
+        EventId = 3030,
+        Level = LogLevel.Information,
+        Message = "Client {ClientId} was not registered; registered it as the owner of data from before clients existed. Rename it in the console")]
+    public static partial void DefaultClientRegistered(ILogger logger, string clientId);
+
+    [LoggerMessage(
+        EventId = 3031,
+        Level = LogLevel.Information,
+        Message = "Gave {TemplateCount} authored template(s) and {JobCount} job(s) from before clients existed to client {ClientId}")]
+    public static partial void ClientOwnerAssigned(ILogger logger, int templateCount, int jobCount, string clientId);
 }

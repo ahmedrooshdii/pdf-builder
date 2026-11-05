@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using PdfBuilder.Infrastructure.Persistence;
@@ -118,7 +119,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         var connection = new NpgsqlConnectionStringBuilder(_admin!.ConnectionString) { Database = database };
         var options = new DbContextOptionsBuilder<PdfBuilderDbContext>();
         options.Configure(connection.ConnectionString);
-        return new PdfBuilderDbContext(options.Options);
+        return new PdfBuilderDbContext(options.Options, new FixedCurrentClient());
     }
 
     private async Task ExecuteAsync(string sql)
@@ -155,11 +156,32 @@ public sealed class TestDatabase(string connectionString, Func<Task> drop) : IAs
 {
     public string ConnectionString { get; } = connectionString;
 
-    public PdfBuilderDbContext CreateContext()
+    /// <summary>A context for a caller with this client, or with none: it then sees no templates or jobs.</summary>
+    public PdfBuilderDbContext CreateContext(string? clientId = null) => CreateContext(new FixedCurrentClient(clientId));
+
+    /// <summary>A context for <paramref name="caller"/>, which a test can change between queries.</summary>
+    public PdfBuilderDbContext CreateContext(ICurrentClient caller)
     {
         var options = new DbContextOptionsBuilder<PdfBuilderDbContext>();
         options.Configure(ConnectionString);
-        return new PdfBuilderDbContext(options.Options);
+        return new PdfBuilderDbContext(options.Options, caller);
+    }
+
+    /// <summary>
+    /// Registers clients, for tests that write templates or jobs: both name their owner with a foreign key.
+    /// Registering a client that exists is not an error.
+    /// </summary>
+    public async Task RegisterClientsAsync(params string[] clientIds)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        foreach (var id in clientIds)
+        {
+            await using var command = new NpgsqlCommand(
+                "INSERT INTO clients (id, name, created_at) VALUES (@id, @id, now()) ON CONFLICT (id) DO NOTHING", connection);
+            command.Parameters.AddWithValue("id", id);
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     public async ValueTask DisposeAsync() => await drop();

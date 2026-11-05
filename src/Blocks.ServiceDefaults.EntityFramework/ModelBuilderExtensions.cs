@@ -1,4 +1,6 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Blocks.ServiceDefaults.EntityFramework;
 
@@ -98,5 +100,33 @@ public static class ModelBuilderExtensions
         });
 
         return modelBuilder;
+    }
+
+    /// <summary>
+    /// Makes a block's own table hold client data: a foreign key from <paramref name="clientId"/> to
+    /// <c>clients(id)</c>, so a row cannot name a client that was never registered. Clients are never
+    /// deleted, and RESTRICT makes sure a mistake cannot take their data with them. The client record
+    /// is internal to this package, which is why a block asks for the key here instead of declaring it.
+    /// </summary>
+    /// <param name="entity">The block's entity.</param>
+    /// <param name="clientId">The property that holds the owning client's id.</param>
+    /// <param name="constraintName">The name of the foreign key, spelled out like the stud's own.</param>
+    public static EntityTypeBuilder<TEntity> HasClientOwner<TEntity>(
+        this EntityTypeBuilder<TEntity> entity,
+        Expression<Func<TEntity, object?>> clientId,
+        string constraintName)
+        where TEntity : class
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(clientId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(constraintName);
+
+        entity.HasOne<ClientRecord>()
+            .WithMany()
+            .HasForeignKey(clientId)
+            .HasConstraintName(constraintName)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        return entity;
     }
 }

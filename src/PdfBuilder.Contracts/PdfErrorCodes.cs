@@ -40,9 +40,17 @@ public static class PdfErrorCodes
     /// </summary>
     public const string RenderFailed = "RENDER_FAILED";
 
+    /// <summary>
+    /// The client the request is for, named by <see cref="IGeneratePdfRequest.ClientId"/> or, when that is null,
+    /// the deployment's default client, is disabled. Final: the operator has to enable the client before
+    /// anything is rendered for it. A client that is not registered, or an id that is not valid, reports
+    /// <see cref="ValidationFailed"/> instead.
+    /// </summary>
+    public const string ClientDisabled = "CLIENT_DISABLED";
+
     /// <summary>Every code this version of the contracts knows. A newer service may send others.</summary>
     public static IReadOnlyList<string> All { get; } =
-        Array.AsReadOnly(new[] { ValidationFailed, TemplateNotFound, TemplateRenderFailed, RenderFailed });
+        Array.AsReadOnly(new[] { ValidationFailed, TemplateNotFound, TemplateRenderFailed, RenderFailed, ClientDisabled });
 
     /// <summary>True when <paramref name="errorCode"/> is one of <see cref="All"/>. Codes are case-sensitive.</summary>
     public static bool IsKnown(string? errorCode) => errorCode is not null && All.Contains(errorCode);

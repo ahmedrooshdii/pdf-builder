@@ -181,12 +181,22 @@ ship without letting one missing optional field fail a batch.
 | | Authored | Built-in |
 | --- | --- | --- |
 | Written in | the web app (Templates), or `/api/templates` | `templates/` in this repository |
-| Stored in | `TemplateStore:AuthoredRootPath`, one `{templateKey}.json` each, on the data volume | `TemplateStore:RootPath`, replaced by CI on every deploy |
+| Stored in | the service's database, owned by the client that created it | `TemplateStore:RootPath`, replaced by CI on every deploy |
 | CSS | its own stylesheet, injected before `</head>` when printed | inside the HTML |
 | Changed by | saving a draft, then publishing it | a commit |
 
-Keys are unique across both, ignoring letter case. A built-in template is read-only in the web app;
+Keys are unique across both, ignoring letter case, within a client. A built-in template is read-only in the web app;
 **Duplicate** copies it into an authored draft you can edit.
+
+### Whose templates they are
+
+An authored template belongs to the client that created it, and only that client can list, read, use,
+change or delete it. For any other client it does not exist: a request for its key answers `404
+TEMPLATE_NOT_FOUND`, the same as for a key nobody has. So two clients can each have a template called
+`statement`, and each one's jobs render its own. A job renders the client's own published template with
+the key, else the built-in one with it. Built-in templates are shared by every client, and no client can
+create a template with a built-in key. The web console works inside the client chosen in its header, with
+exactly these rules. Moving a template from one client to another is not possible yet.
 
 ### Drafts and publishing
 

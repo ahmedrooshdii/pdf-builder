@@ -37,6 +37,7 @@ public static class DependencyInjection
             // PlaywrightPdfRenderer must be one because it owns the shared Chromium process.
             services.AddSingleton<ITemplateEngine, ScribanTemplateEngine>();
             services.AddSingleton<IBuiltInTemplateSource, FileSystemTemplateRepository>();
+            services.AddScoped<ClientScope>();
             services.AddScoped<IAuthoredTemplateStore, EfAuthoredTemplateStore>();
             services.AddSingleton<IPdfRenderer, PlaywrightPdfRenderer>();
             services.AddSingleton<IFileStorage, LocalFileStorage>();
@@ -75,6 +76,7 @@ public static class DependencyInjection
             services.AddBlocksDataProtection<PdfBuilderDbContext>();
 
             services.AddScoped<TemplateImporter>();
+            services.AddScoped<ClientOwnerAssignment>();
             services.AddHostedService<DatabaseStartup>();
 
             return services;

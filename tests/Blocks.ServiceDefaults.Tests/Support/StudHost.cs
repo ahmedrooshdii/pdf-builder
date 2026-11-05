@@ -65,7 +65,8 @@ public sealed partial class StudHost : IAsyncDisposable
     /// <summary>
     /// Endpoints: <c>/generate</c> (pdf:generate), <c>/templates</c> (read), <c>/templates/edit</c>
     /// (write, POST), <c>/plain</c> (no metadata, so the fallback policy applies), <c>/open</c> (anonymous),
-    /// <c>/whoami</c> (pdf:generate, returns <see cref="ICurrentClient"/>), <c>/api/admin/…</c> and
+    /// <c>/whoami</c> (pdf:generate, returns <see cref="ICurrentClient"/>), <c>/acting</c> (pdf:generate, about one
+    /// client's data: <c>RequireActingClient</c>), <c>/api/admin/…</c> and
     /// <c>/api/console/session</c>. <paramref name="customStore"/>, when given, replaces the in-memory
     /// key store the host is given. <paramref name="settings"/> are added to configuration.
     /// </summary>
@@ -116,6 +117,8 @@ public sealed partial class StudHost : IAsyncDisposable
             Scopes = caller.Scopes.Order(StringComparer.Ordinal).ToArray(),
             caller.IsAdmin
         }).RequirePermission(Generate);
+        // Works on one client's data, as the block's template and job endpoints do.
+        app.MapGet("/acting", (ICurrentClient caller) => new { caller.ClientId }).RequirePermission(Generate).RequireActingClient();
         app.MapBlocksAdmin();
         app.MapBlocksConsole();
 

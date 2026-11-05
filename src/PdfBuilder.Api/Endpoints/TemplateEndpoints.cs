@@ -1,4 +1,5 @@
 using Blocks.ServiceDefaults;
+using Blocks.ServiceDefaults.Identity;
 using MediatR;
 using PdfBuilder.Application.Features.Templates;
 using PdfBuilder.Domain.Templates;
@@ -13,7 +14,9 @@ internal static class TemplateEndpoints
 {
     public static IEndpointRouteBuilder MapTemplateEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/templates").WithTags("Templates");
+        // Templates belong to a client: a key is one, the operator must choose one (feature 003).
+        var group = app.MapGroup("/api/templates").WithTags("Templates")
+            .RequireActingClient();
 
         group.MapGet("/", async (ISender sender, CancellationToken ct) =>
                 (await sender.Send(new ListTemplatesQuery(), ct)).Select(TemplateSummaryResponse.From))

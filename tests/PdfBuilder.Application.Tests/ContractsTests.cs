@@ -70,4 +70,23 @@ public sealed class ContractsTests
         Assert.Throws<ArgumentNullException>(() => new GeneratePdfRequest(Guid.NewGuid(), null!, "{}"));
         Assert.Throws<ArgumentNullException>(() => new GeneratePdfRequest(Guid.NewGuid(), "invoice", null!));
     }
+
+    [Fact]
+    public void The_client_disabled_code_is_published_and_known()
+    {
+        Assert.Equal("CLIENT_DISABLED", PdfErrorCodes.ClientDisabled);
+        Assert.Contains(PdfErrorCodes.ClientDisabled, PdfErrorCodes.All);
+        Assert.True(PdfErrorCodes.IsKnown("CLIENT_DISABLED"));
+    }
+
+    [Fact]
+    public void A_request_names_no_client_unless_it_is_told_to()
+    {
+        var request = new GeneratePdfRequest(Guid.NewGuid(), "invoice", "{}");
+
+        Assert.Null(request.ClientId);
+
+        request.ClientId = "erp";
+        Assert.Equal("erp", ((IGeneratePdfRequest)request).ClientId);
+    }
 }

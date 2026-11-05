@@ -1,4 +1,5 @@
 using System.Globalization;
+using Blocks.ServiceDefaults.Problems;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -25,6 +26,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
                 Status = StatusCodes.Status400BadRequest,
                 Title = "One or more validation errors occurred."
             },
+            ClientRequiredException => ClientRequiredProblem.Create(),
             TemplateNotFoundException e => Problem(StatusCodes.Status404NotFound, "Template not found", e),
             TemplateKeyTakenException e => Problem(StatusCodes.Status409Conflict, "Template key taken", e),
             TemplateReadOnlyException e => Problem(StatusCodes.Status409Conflict, "Template is read-only", e),

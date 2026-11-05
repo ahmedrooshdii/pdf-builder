@@ -54,13 +54,23 @@ internal sealed class JobRetentionSweeper(
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PdfBuilderDbContext>();
 
-        var removed = await db.Set<PdfJobRecord>()
-            .Where(j => j.LastSavedAt < cutoff)
-            .ExecuteDeleteAsync(cancellationToken);
+        var removed = await DeleteExpiredJobsOfAllClientsAsync(db, cutoff, cancellationToken);
 
         PersistenceLog.JobsSwept(logger, removed, hours);
         return removed;
     }
+
+    /// <summary>
+    /// The sweeper has no caller, and the context's <c>"client"</c> filter matches nothing without one, so it
+    /// must say that it is looking at every client's jobs. The name is the point: this is one of the three
+    /// places allowed to ignore the filter, and the architecture test lists them (research R2).
+    /// </summary>
+    private static Task<int> DeleteExpiredJobsOfAllClientsAsync(
+        PdfBuilderDbContext db, DateTimeOffset cutoff, CancellationToken cancellationToken) =>
+        db.Set<PdfJobRecord>()
+            .IgnoreQueryFilters([PdfBuilderDbContext.ClientFilter])
+            .Where(j => j.LastSavedAt < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
 
     private static async Task<bool> WaitAsync(PeriodicTimer timer, CancellationToken cancellationToken)
     {

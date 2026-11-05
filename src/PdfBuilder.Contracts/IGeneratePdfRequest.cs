@@ -28,4 +28,12 @@ public interface IGeneratePdfRequest
     /// template's own page setup, which is also what a publisher built before this member existed gets.
     /// </summary>
     PdfPageSetup? PageSetup { get; }
+
+    /// <summary>
+    /// The client this job is for, for example <c>ecommerce</c>. Null means the deployment's default
+    /// client (<c>Blocks:Bus:DefaultClientId</c>), which is also what a publisher built before this
+    /// member existed gets. Must match <c>^[a-z][a-z0-9-]{0,39}$</c>. The service cannot check that the
+    /// message really comes from this client: give broker credentials only to trusted product backends.
+    /// </summary>
+    string? ClientId { get; }
 }

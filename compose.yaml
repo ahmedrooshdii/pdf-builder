@@ -57,6 +57,10 @@ services:
       # nginx in the web container forwards the browser's address. Believe it only from Docker's own
       # networks (its default address pools), so the console's sign-in limit counts each browser apart.
       Blocks__ForwardedHeaders__KnownNetworks: 172.16.0.0/12,192.168.0.0/16
+      # The client that messages published to RabbitMQ naming none are handled for, and the owner of any
+      # templates and jobs from before clients existed. `samples/admin.http` registers this one. A fresh stack
+      # needs no value at all; it is here so the stack accepts messages from publishers older than client ids.
+      Blocks__Bus__DefaultClientId: ecommerce
     volumes:
       - pdf-data:/data
       # Edit a template on the host and the next render picks it up, no rebuild needed.
