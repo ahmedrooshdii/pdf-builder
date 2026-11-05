@@ -67,6 +67,8 @@ internal static class BlocksProblems
         Title = "An error occurred while processing your request."
     };
 
+    public static ProblemDetails ClientRequired() => ClientRequiredProblem.Create();
+
     public static ProblemDetails ClientNotFound() => Create(
         StatusCodes.Status404NotFound, "Client not found", "No client has this id.", BlocksProblemCodes.ClientNotFound);
 

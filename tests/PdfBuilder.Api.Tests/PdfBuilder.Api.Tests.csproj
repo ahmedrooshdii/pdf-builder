@@ -20,6 +20,7 @@
   <!-- One PostgreSQL fixture for every test project that needs a database, rather than a copy of it. -->
   <ItemGroup>
     <Compile Include="..\PdfBuilder.Infrastructure.Tests\Persistence\PostgresFixture.cs" Link="Persistence\PostgresFixture.cs" />
+    <Compile Include="..\PdfBuilder.Infrastructure.Tests\Support\FixedCurrentClient.cs" Link="Support\FixedCurrentClient.cs" />
   </ItemGroup>
 
   <!-- Log capture for the authentication tests, shared with the stud's own tests. -->

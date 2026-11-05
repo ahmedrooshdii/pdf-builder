@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Blocks.ServiceDefaults.EntityFramework;
+using Blocks.ServiceDefaults.Identity;
 using Blocks.ServiceDefaults.Sessions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,7 @@ public sealed class EfConsoleSessionStoreTests(PostgresFixture postgres)
     private static ServiceProvider BuildProvider(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddScoped<ICurrentClient>(_ => new FixedCurrentClient());   // the context needs a caller; these tests are about no client in particular
         services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(connectionString));
         services.AddBlocksConsoleSessionStore<PdfBuilderDbContext>();
         services.AddOptions<Blocks.ServiceDefaults.BlocksAuthOptions>().Configure(o => o.BlockCode = "pdf");

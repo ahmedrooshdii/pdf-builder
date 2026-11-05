@@ -59,6 +59,11 @@ cases, and each failure: the three that are refused at the edge with a 400, the 
 accepted and then fails in the worker with `TEMPLATE_NOT_FOUND`, and the two refusals for a
 missing or invalid key. Set `@apiKey` at the top first.
 
+The last section is a walk-through with two clients: templates and jobs belong to the client whose key
+created them, so each client sees only its own, can have its own `statement` template, and gets a 404 for
+another client's template or job. The built-in `invoice` template is everybody's. The operator, with the
+admin key, names the client to work in with `X-Client-Id`.
+
 ## admin.http
 
 The management calls, in order: register a client, issue keys, list them, revoke one, disable and

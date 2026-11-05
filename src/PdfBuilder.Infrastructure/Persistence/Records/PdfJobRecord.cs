@@ -9,6 +9,10 @@ namespace PdfBuilder.Infrastructure.Persistence.Records;
 internal sealed class PdfJobRecord
 {
     public Guid JobId { get; set; }
+
+    /// <summary>The client that owns this job; never changes after creation (FR-001).</summary>
+    public string ClientId { get; set; } = string.Empty;
+
     public string TemplateKey { get; set; } = string.Empty;
 
     /// <summary>The <see cref="PdfJobStatus"/> name, as the API returns it.</summary>
@@ -28,9 +32,10 @@ internal sealed class PdfJobRecord
     /// </summary>
     public DateTimeOffset LastSavedAt { get; set; }
 
-    public static PdfJobRecord From(PdfJob job, DateTimeOffset savedAt) => new()
+    public static PdfJobRecord From(PdfJob job, string clientId, DateTimeOffset savedAt) => new()
     {
         JobId = job.JobId,
+        ClientId = clientId,
         TemplateKey = job.TemplateKey,
         Status = job.Status.ToString(),
         EnqueuedAt = job.EnqueuedAt.ToUniversalTime(),
@@ -43,7 +48,10 @@ internal sealed class PdfJobRecord
         LastSavedAt = savedAt.ToUniversalTime()
     };
 
-    /// <summary>Overwrites every stored value except the key with those of <paramref name="other"/>.</summary>
+    /// <summary>
+    /// Overwrites every stored value except the key with those of <paramref name="other"/>. The owner is
+    /// deliberately not copied: a job never changes hands (FR-001).
+    /// </summary>
     public void CopyFrom(PdfJobRecord other)
     {
         TemplateKey = other.TemplateKey;

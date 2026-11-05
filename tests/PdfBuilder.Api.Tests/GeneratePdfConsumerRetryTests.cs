@@ -1,10 +1,14 @@
 using System.Collections.Concurrent;
+using Blocks.ServiceDefaults;
+using Blocks.ServiceDefaults.Clients;
+using Blocks.ServiceDefaults.Identity;
 using MassTransit;
 using MassTransit.Testing;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using PdfBuilder.Api.Messaging;
@@ -13,6 +17,7 @@ using PdfBuilder.Application.Features.GeneratePdf;
 using PdfBuilder.Contracts;
 using PdfBuilder.Domain.Exceptions;
 using PdfBuilder.Domain.Jobs;
+using PdfBuilder.TestSupport;
 
 namespace PdfBuilder.Api.Tests;
 
@@ -34,6 +39,9 @@ public sealed class GeneratePdfConsumerRetryTests
 
         public Task<PdfJob?> GetAsync(Guid jobId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Jobs.TryGetValue(jobId, out var job) ? job : null);
+
+        public Task<PdfJob> ClaimAsync(Guid jobId, string templateKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Jobs.GetOrAdd(jobId, _ => PdfJob.Enqueued(jobId, templateKey, DateTimeOffset.UtcNow)));
     }
 
     [Fact]
@@ -45,10 +53,18 @@ public sealed class GeneratePdfConsumerRetryTests
             .ThrowsAsync(new PdfRenderException("chromium died"));
         var jobs = new DictionaryJobStore();
 
+        // The consumer checks that the client exists and is enabled.
+        var clients = Substitute.For<IClientKeyStore>();
+        clients.GetClientAsync("alpha", Arg.Any<CancellationToken>())
+            .Returns(new ClientInfo("alpha", "alpha", DateTimeOffset.UtcNow, null));
+
         await using var provider = new ServiceCollection()
             .AddSingleton(sender)
             .AddSingleton<IPdfJobStore>(jobs)
+            .AddSingleton(clients)
             .AddSingleton(TimeProvider.System)
+            .AddScoped<IClientContext, FixedCurrentClient>()
+            .AddSingleton(Options.Create(new BlocksBusOptions { DefaultClientId = "alpha" }))
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
             .AddMassTransitTestHarness(x => x.AddConsumer<GeneratePdfConsumer>(c =>
                 c.UseMessageRetry(r => r.Immediate(GeneratePdfConsumerDefinition.RetryLimit))))
@@ -59,7 +75,7 @@ public sealed class GeneratePdfConsumerRetryTests
         var jobId = NewId.NextGuid();
         await jobs.SaveAsync(PdfJob.Enqueued(jobId, "invoice", DateTimeOffset.UtcNow), ct);
 
-        await harness.Bus.Publish<IGeneratePdfRequest>(new GeneratePdfRequest(jobId, "invoice", "{}"), ct);
+        await harness.Bus.Publish<IGeneratePdfRequest>(new GeneratePdfRequest(jobId, "invoice", "{}") { ClientId = "alpha" }, ct);
 
         Assert.True(await harness.Published.Any<Fault<IGeneratePdfRequest>>(ct));
         await sender.Received(GeneratePdfConsumerDefinition.RetryLimit + 1)

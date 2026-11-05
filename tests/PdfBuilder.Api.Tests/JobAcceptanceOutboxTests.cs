@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Identity;
 using MassTransit;
 using MassTransit.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -5,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
 using PdfBuilder.Application.Abstractions;
+using PdfBuilder.Api.Tests.Support;
 using PdfBuilder.Contracts;
 using PdfBuilder.Domain.Jobs;
 using PdfBuilder.Infrastructure.Jobs;
@@ -32,6 +34,12 @@ public sealed class JobAcceptanceOutboxTests(PostgresFixture postgres)
         services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(connectionString));
         services.AddScoped<IPdfJobStore, EfPdfJobStore>();
 
+        // What the stud registers for a block: one caller per scope. Each scope below acts as alpha.
+        services.AddScoped<FixedCurrentClient>();
+        services.AddScoped<ICurrentClient>(provider => provider.GetRequiredService<FixedCurrentClient>());
+        services.AddScoped<IClientContext>(provider => provider.GetRequiredService<FixedCurrentClient>());
+        services.AddScoped<ClientScope>();
+
         // The same outbox configuration the service uses (MessagingExtensions.AddMessaging).
         services.AddMassTransitTestHarness(x =>
         {
@@ -58,7 +66,8 @@ public sealed class JobAcceptanceOutboxTests(PostgresFixture postgres)
             CorrelationId = jobId,
             TemplateKey = "invoice",
             JsonPayload = "{}",
-            PageSetup = (PdfPageSetup?)null
+            PageSetup = (PdfPageSetup?)null,
+            ClientId = "alpha"
         }, Ct);
 
     /// <summary>Rows in <c>pdf_jobs</c> and <c>outbox_message</c>, read over a separate connection.</summary>
@@ -78,11 +87,13 @@ public sealed class JobAcceptanceOutboxTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         await using var provider = BuildProvider(database.ConnectionString);
         var jobId = Guid.NewGuid();
 
         await using (var scope = provider.CreateAsyncScope())
         {
+            scope.ServiceProvider.GetRequiredService<IClientContext>().ActAs("alpha");
             await PublishRequestAsync(scope.ServiceProvider.GetRequiredService<IPublishEndpoint>(), jobId);
 
             // Queued in the context only: another connection sees neither a job nor a message yet.
@@ -100,11 +111,13 @@ public sealed class JobAcceptanceOutboxTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         await using var provider = BuildProvider(database.ConnectionString);
         var jobId = Guid.NewGuid();
 
         await using (var scope = provider.CreateAsyncScope())
         {
+            scope.ServiceProvider.GetRequiredService<IClientContext>().ActAs("alpha");
             await PublishRequestAsync(scope.ServiceProvider.GetRequiredService<IPublishEndpoint>(), jobId);
 
             // A key past the column's 64 characters: the database refuses the job row.
@@ -122,6 +135,7 @@ public sealed class JobAcceptanceOutboxTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
         await using var provider = BuildProvider(database.ConnectionString);
         var harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
@@ -140,6 +154,7 @@ public sealed class JobAcceptanceOutboxTests(PostgresFixture postgres)
 
             await using (var scope = provider.CreateAsyncScope())
             {
+                scope.ServiceProvider.GetRequiredService<IClientContext>().ActAs("alpha");
                 await PublishRequestAsync(scope.ServiceProvider.GetRequiredService<IPublishEndpoint>(), jobId);
                 await scope.ServiceProvider.GetRequiredService<IPdfJobStore>()
                     .SaveAsync(PdfJob.Enqueued(jobId, "invoice", Now), Ct);
@@ -151,5 +166,29 @@ public sealed class JobAcceptanceOutboxTests(PostgresFixture postgres)
         {
             await delivery.StopAsync(Ct);
         }
+    }
+
+    [Fact]
+    public async Task A_job_submitted_over_http_is_published_with_its_client_and_recorded_under_it()
+    {
+        // The endpoint names the same owner in the message and in the job row, so the worker renders with that
+        // client's templates and the job can be read by that client and nobody else (feature 003, R5.2).
+        PostgresFixture.SkipUnlessEnabled();
+        await using var api = await ApiFactory.StartAsync(postgres, services =>
+            services.AddSingleton<PdfBuilder.Application.Abstractions.IPdfRenderer>(new PdfBuilder.Api.Tests.Support.RecordingRenderer()));
+        using var beta = await api.ClientForAsync("beta", Ct);
+
+        var jobId = await ApiFactory.SubmitJobAsync(beta, "invoice", new { }, Ct);
+        await ApiFactory.WaitForJobAsync(beta, jobId, Ct);
+
+        var harness = api.Services.GetRequiredService<ITestHarness>();
+        Assert.True(await harness.Consumed.Any<IGeneratePdfRequest>(
+            m => m.Context.Message.CorrelationId == jobId && m.Context.Message.ClientId == "beta", Ct));
+
+        await using var connection = new NpgsqlConnection(api.Database.ConnectionString);
+        await connection.OpenAsync(Ct);
+        await using var command = new NpgsqlCommand("SELECT client_id FROM pdf_jobs WHERE job_id = @id", connection);
+        command.Parameters.AddWithValue("id", jobId);
+        Assert.Equal("beta", (string?)await command.ExecuteScalarAsync(Ct));
     }
 }

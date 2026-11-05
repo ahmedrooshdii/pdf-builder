@@ -4,6 +4,57 @@ Releases of the `PdfBuilder.Contracts` NuGet package. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/). Each release is the git tag `contracts-v<version>`.
 
+## [Unreleased] — 1.2.0
+
+Additive: producers and consumers on 1.0.0 or 1.1.0 keep matching. The message type, its namespace and
+therefore its exchange name are unchanged.
+
+### Added
+
+- `IGeneratePdfRequest.ClientId` (and a settable `GeneratePdfRequest.ClientId`): the client a job is for.
+  Templates and jobs now belong to the client that created them, and a request is rendered with that
+  client's published template, or a built-in one. Null, which is what a 1.0.0 or 1.1.0 publisher sends,
+  means the deployment's **default client** (`Blocks:Bus:DefaultClientId`), so those publishers keep working
+  on a deployment that sets it. On a deployment that does not, their messages are answered
+  `VALIDATION_FAILED` ("The message names no client and no default client is configured."). See
+  [docs/message-contracts.md](docs/message-contracts.md#clientid).
+- `PdfErrorCodes.ClientDisabled` (`CLIENT_DISABLED`): the client the request is for is disabled. A client that
+  is not registered, or an id that is not a client id, is `VALIDATION_FAILED`, as is a `CorrelationId` that
+  another client's job already uses.
+
+### Added (service): client-scoped templates and jobs
+
+Released together with persistent storage (001), API keys (002) and console sign-in (004), as the first
+milestone: nothing is open, and each client sees only its own data.
+
+- **Templates and jobs belong to the client that created them.** A client lists, reads, uses and changes
+  only its own. Another client's template key or job id answers `404`, exactly as one that does not
+  exist, never `403`. Two clients can each have a template called `statement`, and a job renders the
+  client's own published template, else the built-in one. Built-in templates are shared by every client.
+  A job id stays unique across clients.
+- **The operator works inside one client at a time.** With the admin key or a console session, template and
+  job calls need `X-Client-Id`: without it they are refused `400 VALIDATION_FAILED`, for a client that is not
+  registered `404 CLIENT_NOT_FOUND`. A disabled client still works for the operator. The console already
+  sent the chosen client.
+- **New setting: `Blocks:Bus:DefaultClientId`**, optional. It names the client that messages with no
+  `ClientId` are handled for, and it is the one step of the upgrade: templates and jobs that already exist
+  have no owner, so they are given to this client, once, and the client is registered if it is new. **A
+  deployment that has such templates or jobs does not start without it**, saying which setting to fill in
+  and changing nothing. A new install needs nothing. See
+  [docs/operations.md](docs/operations.md#upgrading-to-per-client-templates-and-jobs).
+- **Two migrations**, `AddClientOwner` and `RequireClientOwner`, with the assignment between them. If you
+  apply migrations yourself, run the statements in the operations guide between the two.
+- Messages published to the bus that name no client, or an unregistered, malformed or disabled one, or that
+  reuse another client's job id, are answered and nothing is rendered (see Contracts 1.2.0 above).
+
+### Changed (service)
+
+- A job published straight to the bus is recorded as `Pending` when work starts, not first when it finishes,
+  so its client can poll it from the start.
+- Anyone who can publish to the block's exchanges can name any client in a message. Give broker credentials
+  only to trusted product backends. This is a known limit, now written down in
+  [docs/message-contracts.md](docs/message-contracts.md#clientid).
+
 ## [Unreleased] — 1.1.0
 
 Nothing here changes the wire format of 1.0.0. Producers and consumers on either version keep
@@ -125,10 +176,11 @@ what they were, and the contracts version does not change for it.
 
 ### Note for implementers of `IGeneratePdfRequest`
 
-Adding `PageSetup` to the interface is source- and binary-breaking for a class of your own that
-implements `IGeneratePdfRequest`: add a `PdfPageSetup? PageSetup { get; }` that returns null. Anonymous
-objects and `GeneratePdfRequest` are unaffected. The break is accepted deliberately in
-`src/PdfBuilder.Contracts/CompatibilitySuppressions.xml` (CP0006); the wire format is unchanged.
+Adding `PageSetup` (1.1.0) and `ClientId` (1.2.0) to the interface is source- and binary-breaking for a
+class of your own that implements `IGeneratePdfRequest`: add a `PdfPageSetup? PageSetup { get; }` and a
+`string? ClientId { get; }` that return null. Anonymous objects and `GeneratePdfRequest` are unaffected. The
+breaks are accepted deliberately in `src/PdfBuilder.Contracts/CompatibilitySuppressions.xml` (CP0006); the
+wire format is unchanged.
 
 ## [1.0.0] — 2026-10-28
 

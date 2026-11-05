@@ -99,9 +99,29 @@ signing out or replacing the admin key ends it on every instance at once; the co
 `X-Console: 1` (the CSRF defence). The operator, by key or session, can act as a client with
 `X-Client-Id`; for everyone else that header is ignored.
 
-Code below the handler reads the caller only through `ICurrentClient` (constitution Principle VI).
-In this release that is the log scope; the data is not yet separated per client (feature 003).
-The message bus is unchanged: publishers are trusted through their broker credentials.
+## Client scoping
+
+Templates and jobs belong to the client that created them. Code below the handler reads the caller
+only through `ICurrentClient` (constitution Principle VI), and the one place that turns it into a
+rule is the database context: `authored_templates` and `pdf_jobs` have a query filter on the caller's
+client, so every read, update and delete sees only the caller's rows, and with no client it sees none.
+`Application` names no client. "The client's own template, else the built-in one", "a key is unique
+within a client" and "another client's key is a 404, not a 403" all follow from the filtered store.
+
+**Over HTTP**, the client is the key's. The operator names one with `X-Client-Id`, and the endpoints
+that are about a client's data (`/api/templates`, `/api/pdf/jobs`) refuse the operator with none (`400`)
+or with an unregistered one (`404`). The job endpoint publishes the caller's client in the message.
+
+**On the bus**, the consumer works out the client first: the message's `ClientId`, else
+`Blocks:Bus:DefaultClientId`. A missing, malformed, unregistered or disabled client is answered with
+nothing rendered and no job recorded. Otherwise it calls `IClientContext.ActAs(clientId)`, which makes
+`ICurrentClient` answer with that client for the rest of the message, then claims the job id (an id
+another client uses is refused) and renders. Publishers are still trusted through their broker
+credentials: anyone who can publish can name any client.
+
+**Upgrade.** Rows that predate clients are given to the default client once, between two migrations,
+and a service with such rows and no default client does not start
+([operations.md](operations.md#upgrading-to-per-client-templates-and-jobs)).
 
 ## Decisions worth knowing
 

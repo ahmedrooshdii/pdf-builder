@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -29,6 +30,15 @@ public sealed class PdfBuilderDbContextFactory : IDesignTimeDbContextFactory<Pdf
     {
         var options = new DbContextOptionsBuilder<PdfBuilderDbContext>();
         options.Configure("Host=127.0.0.1;Port=1;Database=pdf_builder_design_time;Timeout=1");
-        return new PdfBuilderDbContext(options.Options);
+        return new PdfBuilderDbContext(options.Options, new NoClient());
+    }
+
+    /// <summary>Building the model asks nobody for anything: there is no caller at design time.</summary>
+    private sealed class NoClient : ICurrentClient
+    {
+        public string? ClientId => null;
+        public string? KeyId => null;
+        public IReadOnlySet<string> Scopes { get; } = new HashSet<string>(StringComparer.Ordinal);
+        public bool IsAdmin => false;
     }
 }

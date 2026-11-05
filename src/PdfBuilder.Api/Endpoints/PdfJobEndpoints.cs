@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Blocks.ServiceDefaults;
+using Blocks.ServiceDefaults.Identity;
 using FluentValidation;
 using MassTransit;
 using PdfBuilder.Api.Messaging;
@@ -22,7 +23,10 @@ internal static class PdfJobEndpoints
     {
         var group = app.MapGroup("/api/pdf/jobs")
             .WithTags("PDF jobs")
-            .RequirePermission(PdfPermissions.Generate);
+            .RequirePermission(PdfPermissions.Generate)
+
+            // Jobs belong to a client: a key is one, the operator must choose one (feature 003).
+            .RequireActingClient();
 
         group.MapPost("/", EnqueueAsync)
             .WithName("EnqueuePdfJob")
@@ -45,6 +49,7 @@ internal static class PdfJobEndpoints
         IValidator<GeneratePdfCommand> validator,
         IPdfJobStore jobs,
         IPublishEndpoint bus,
+        ICurrentClient caller,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -75,7 +80,11 @@ internal static class PdfJobEndpoints
             CorrelationId = jobId,
             command.TemplateKey,
             JsonPayload = payload,
-            request.PageSetup
+            request.PageSetup,
+
+            // The worker renders with this client's templates and records the job under it, exactly as the
+            // job below is recorded: the message and the job name the same owner.
+            caller.ClientId
         }, ct);
 
         await jobs.SaveAsync(PdfJob.Enqueued(jobId, command.TemplateKey, clock.GetUtcNow()), ct);

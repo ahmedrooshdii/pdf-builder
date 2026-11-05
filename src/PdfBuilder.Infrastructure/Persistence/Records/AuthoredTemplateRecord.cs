@@ -5,6 +5,9 @@ namespace PdfBuilder.Infrastructure.Persistence.Records;
 /// <summary>The stored shape of an <see cref="AuthoredTemplate"/>. Its status is derived, so it is not a column.</summary>
 internal sealed class AuthoredTemplateRecord
 {
+    /// <summary>The client that owns this template; never changes after creation (FR-001).</summary>
+    public string ClientId { get; set; } = string.Empty;
+
     public string Key { get; set; } = string.Empty;
     public TemplateContentRecord Draft { get; set; } = null!;
 
@@ -18,8 +21,9 @@ internal sealed class AuthoredTemplateRecord
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
 
-    public static AuthoredTemplateRecord From(AuthoredTemplate template) => new()
+    public static AuthoredTemplateRecord From(AuthoredTemplate template, string clientId) => new()
     {
+        ClientId = clientId,
         Key = template.Key,
         Draft = TemplateContentRecord.From(template.Draft),
         Published = template.Published is null ? null : TemplateContentRecord.From(template.Published),

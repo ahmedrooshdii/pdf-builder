@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PdfBuilder.Contracts;
@@ -16,6 +17,11 @@ internal static class PdfJobConfiguration
 
         job.HasKey(j => j.JobId);
         job.Property(j => j.JobId).ValueGeneratedNever();
+
+        // Job ids stay unique across every client: logs, files and queued messages are keyed by the id.
+        // The owner decides who can read the job; it is set when the job is created and never changes.
+        job.Property(j => j.ClientId).HasMaxLength(40).IsRequired();
+        job.HasClientOwner(j => j.ClientId, "fk_pdf_jobs_clients_client_id");
 
         // "≤ 64 chars": the template key limit published in PdfRequestLimits, validated before insert.
         job.Property(j => j.TemplateKey).HasMaxLength(PdfRequestLimits.TemplateKeyMaxLength).IsRequired();

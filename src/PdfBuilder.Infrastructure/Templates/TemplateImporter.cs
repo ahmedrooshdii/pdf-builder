@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PdfBuilder.Application.Abstractions;
+using PdfBuilder.Domain.Templates;
 using PdfBuilder.Infrastructure.Persistence;
 using PdfBuilder.Infrastructure.Persistence.Records;
 
@@ -24,6 +25,7 @@ namespace PdfBuilder.Infrastructure.Templates;
 internal sealed class TemplateImporter(
     IOptions<TemplateStoreOptions> options,
     IBuiltInTemplateSource builtIn,
+    ClientOwnerAssignment clientOwner,
     TimeProvider clock,
     ILogger<TemplateImporter> logger)
 {
@@ -54,7 +56,7 @@ internal sealed class TemplateImporter(
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var skipped = new List<SkippedTemplateFile>(read.Skipped);
-        var imported = new List<AuthoredTemplateRecord>();
+        var toImport = new List<AuthoredTemplate>();
 
         foreach (var template in read.Templates)
         {
@@ -62,7 +64,18 @@ internal sealed class TemplateImporter(
                 skipped.Add(new SkippedTemplateFile(
                     $"{template.Key}.json", SkipReasons.BuiltInKey, "A built-in template has this key."));
             else
-                imported.Add(AuthoredTemplateRecord.From(template));
+                toImport.Add(template);
+        }
+
+        // Templates belong to a client, and only the operator knows which one these belong to. Ask only now,
+        // when there is something to give an owner: a fresh install, or one with nothing to import, needs no
+        // setting. If the setting is missing this throws before anything is written, and the transaction
+        // (and the advisory lock) is released, so the next start finds exactly what this one did.
+        var imported = new List<AuthoredTemplateRecord>();
+        if (toImport.Count > 0)
+        {
+            var owner = await clientOwner.RequireOwnerAsync(db, cancellationToken);
+            imported.AddRange(toImport.Select(template => AuthoredTemplateRecord.From(template, owner)));
         }
 
         db.Set<AuthoredTemplateRecord>().AddRange(imported);

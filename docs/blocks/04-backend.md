@@ -91,8 +91,12 @@ The admin has no `client_id`. On client-scoped endpoints an admin sends `X-Clien
 which is honoured **only** for principals with the `admin` scope and ignored for everyone else. This
 is how the console works inside the selected client using the same endpoints products use.
 Built in 004: `ICurrentClient.ClientId` is that value for the admin; a malformed one (not a client
-id, or sent twice) from the admin is `400 VALIDATION_FAILED`; whether the client exists is left to
-client-scoped data (003), which answers 404 for an unknown one.
+id, or sent twice) from the admin is `400 VALIDATION_FAILED`.
+Built in 003: `.RequireActingClient()` on a group of endpoints (the PDF block's `/api/templates` and
+`/api/pdf/jobs`) refuses the admin with no client `400 VALIDATION_FAILED` (`errors["X-Client-Id"]`),
+and an unregistered one `404 CLIENT_NOT_FOUND`. A disabled client is allowed: the operator can still
+inspect and prepare its data. A caller with a key is that key's client and costs no lookup. A storage
+outage while checking is `503`, never "not found".
 
 #### `ICurrentClient`
 
@@ -303,7 +307,7 @@ Studs use the `Blocks` section, so every block is configured the same way:
 | `Blocks:Files:RetentionDays` | `30` | |
 | `Blocks:RateLimits:RequestsPerMinute` | `120` | Per client, overridable per client. |
 | `Blocks:RateLimits:MaxPendingJobs` | `100` | Per client, overridable per client. |
-| `Blocks:Bus:DefaultClientId` | – | Client assumed for bus messages without one. Unset = such messages are rejected. |
+| `Blocks:Bus:DefaultClientId` | – | Client assumed for bus messages that name none, and owner of templates and jobs from before clients existed. Must be a client id. Unset = such messages are refused, and a database that has such data does not start. Built in 003; see [configuration.md](../configuration.md#bus). |
 | `Blocks:Database:MigrateOnStartup` | `true` | EF Core takes a migration lock, so concurrent starts are safe. |
 | `Blocks:Branding:ProductName` | block's name | Shown by the console; see [06-deployment.md](06-deployment.md#what-a-deployment-configures). |
 | `Blocks:Branding:LogoPath` | – | SVG or PNG on the data volume. Unset = the block's own logo. |
@@ -343,9 +347,8 @@ Built in feature 001 (`specs/001-persistent-storage`), before clients exist:
   inbox are deliberately not used: they change how retries and the final `RENDER_FAILED` transition
   interact, which this feature does not need.
 - **One-time import**, under a PostgreSQL advisory lock, recorded in `template_imports`, so it runs once
-  however many instances start together. Files are read, never changed. There is no client to import
-  them under yet: feature 003 adds `client_id`, backfills it from `Blocks:Bus:DefaultClientId` and adds
-  the query filter in one migration.
+  however many instances start together. Files are read, never changed. Since 003 the imported
+  templates are owned by `Blocks:Bus:DefaultClientId`; see [Client scoping](#client-scoping).
 - `JobStore:RetentionHours` keeps its meaning, default (24) and range (1–168), counted from the
   job's last save as before: reads apply the cut-off, and an hourly sweeper deletes the rows past
   it, so a job stops being pollable at the same moment it does today, but a restart no longer
@@ -354,17 +357,46 @@ Built in feature 001 (`specs/001-persistent-storage`), before clients exist:
 
 ### Client scoping
 
-- `templates` and `pdf_jobs` get a query filter on `ICurrentClient.ClientId`. Admin queries across
-  clients call `IgnoreQueryFilters()` in a method whose name says so (`ListAllClientsJobsAsync`), and
-  nowhere else.
-- Template lookup order for a job: the client's published authored template, then built-in.
-- **Bus.** `IGeneratePdfRequest` gains `string? ClientId { get; }`. The consumer sets the scoped
-  `ICurrentClient` from it before anything else runs; null falls back to
-  `Blocks:Bus:DefaultClientId`, and if that is unset the message fails with `VALIDATION_FAILED`.
+Built in feature 003 (`specs/003-client-scoped-templates-jobs`).
+
+- **The filter.** `PdfBuilderDbContext` takes `ICurrentClient` and gives `authored_templates` and
+  `pdf_jobs` a named query filter, `"client"`: `ClientId != null && row.ClientId == CallerClientId`.
+  `CallerClientId` is a member of the context, so EF turns it into a parameter each time a query runs:
+  one cached model serves every client, and a context created before a bus consumer says which client
+  it acts as still sees that client. With no client the condition is false, so nothing matches, never
+  everything. Stores set the owner on insert from `ClientScope` (a filter does not apply to inserts);
+  an update never changes it. `Application` is unchanged and names no client: "own template, else
+  built-in", key uniqueness and the 404 for another client's key follow from the filtered store.
+- **Cross-client reads** call `IgnoreQueryFilters(["client"])` only in `DeleteExpiredJobsOfAllClientsAsync`
+  (the retention sweeper has no caller), `AssignUnownedToDefaultClientAsync` (the upgrade, in raw SQL)
+  and `ClaimAsync`, and an architecture test lists them. A second test fails when an entity with a
+  `ClientId` has no filter (Principle III's gate); `api_keys` is the one exception, read before any
+  client is known.
+- **Keys and ids.** Template keys are unique per client, ignoring case (primary key `(client_id, key)`,
+  unique `(client_id, key_lower)`), and a built-in key is taken for everyone. A job id stays unique across
+  clients: `ClaimAsync` records a `Pending` job for the caller or refuses an id another client has
+  (`JobIdTakenException`, `VALIDATION_FAILED`), and nothing about that job is read or reported.
+- **The upgrade is two migrations around a startup step**, not one. `AddClientOwner` adds a nullable
+  `client_id`; the service gives every row without one to `Blocks:Bus:DefaultClientId` (registering that
+  client if it is missing) under an advisory lock; `RequireClientOwner` makes it `NOT NULL`, ties it to
+  `clients`, and changes the key. It happens once, and a database with no such rows needs no setting.
+  Without the setting and with such rows the service does not start. There is no default value in the
+  second migration on purpose: a row left without an owner makes it fail, and say so.
+- **Acting as a client.** A caller's client is the key's, or for the operator `X-Client-Id`
+  ([Acting as a client](#acting-as-a-client)). Work that is not an HTTP request says which client it is
+  for with `IClientContext.ActAs`, which the bus consumer calls first; `ICurrentClient` then answers with
+  that client, no permissions, not the operator.
+- **Bus.** `IGeneratePdfRequest` gained `string? ClientId` (Contracts 1.2.0). The consumer resolves it:
+  the message's, else `Blocks:Bus:DefaultClientId`; a missing, malformed, unregistered or disabled client
+  is answered (`VALIDATION_FAILED`, or `CLIENT_DISABLED`) with nothing rendered and no job recorded. The
+  endpoint publishes the caller's client too. A job published straight to the bus is recorded as `Pending`
+  when work starts.
+- **Files.** The file a job produces is owned through its job (`file_id`, `client_id`). No schema change:
+  the link still works for whoever holds it until feature 005.
 - **Trust on the bus** is the broker's: each product gets its own RabbitMQ user allowed to publish
   only to the PDF exchanges in the block's vhost. A publisher can claim any `ClientId`, so only
   trusted product backends get broker credentials. This is a known phase 1 limit, written into
-  [../message-contracts.md](../message-contracts.md) when the member ships.
+  [../message-contracts.md](../message-contracts.md#clientid).
 
 ### Template packs and fonts
 
@@ -386,7 +418,7 @@ it does not wait on the multi-client work:
 | Type | Member | Notes |
 | --- | --- | --- |
 | `IGeneratePdfRequest` | `string? ClientId` | See above. |
-| `IGeneratePdfResponse` | `DateTimeOffset? FileUrlExpiresAt` | Null while signing is off. |
+| `IGeneratePdfResponse` | `DateTimeOffset? FileUrlExpiresAt` | **Feature 005, not 003.** Null while signing is off. Not added in 1.2.0, which carries `ClientId` and the `CLIENT_DISABLED` code. |
 
 `IGeneratePdfResponse.FileUrl` is currently documented as "not signed and does not expire". Turning
 signing on changes that behaviour for existing bus consumers, so it ships behind

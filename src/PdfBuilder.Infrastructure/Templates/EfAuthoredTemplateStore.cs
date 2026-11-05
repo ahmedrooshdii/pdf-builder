@@ -22,8 +22,13 @@ namespace PdfBuilder.Infrastructure.Templates;
 /// Reads are untracked and writes that change an existing row are single statements, so a failed
 /// save leaves nothing half-done in the shared context.
 /// </para>
+/// <para>
+/// Templates belong to a client. The context's <c>"client"</c> query filter confines every read, update
+/// and delete here to the caller's own, so another client's key behaves as if it does not exist; only
+/// an insert needs the owner spelled out, and takes it from <see cref="ClientScope"/>.
+/// </para>
 /// </remarks>
-public sealed class EfAuthoredTemplateStore(PdfBuilderDbContext db) : IAuthoredTemplateStore
+public sealed class EfAuthoredTemplateStore(PdfBuilderDbContext db, ClientScope scope) : IAuthoredTemplateStore
 {
     public async Task<IReadOnlyList<AuthoredTemplate>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -50,7 +55,7 @@ public sealed class EfAuthoredTemplateStore(PdfBuilderDbContext db) : IAuthoredT
 
     public async Task AddAsync(AuthoredTemplate authoredTemplate, CancellationToken cancellationToken = default)
     {
-        var record = AuthoredTemplateRecord.From(authoredTemplate);
+        var record = AuthoredTemplateRecord.From(authoredTemplate, scope.RequireClientId());
         db.Set<AuthoredTemplateRecord>().Add(record);
 
         try
@@ -68,7 +73,7 @@ public sealed class EfAuthoredTemplateStore(PdfBuilderDbContext db) : IAuthoredT
 
     public async Task UpdateAsync(AuthoredTemplate authoredTemplate, int expectedRevision, CancellationToken cancellationToken = default)
     {
-        var record = AuthoredTemplateRecord.From(authoredTemplate);
+        var record = AuthoredTemplateRecord.From(authoredTemplate, scope.RequireClientId());
         var key = authoredTemplate.Key;
 
         var updated = await db.Set<AuthoredTemplateRecord>()

@@ -13,12 +13,16 @@ public sealed class InMemoryClientKeyStore : IClientKeyStore
     private readonly Dictionary<string, ClientInfo> _clients = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ApiKeyInfo> _keys = new(StringComparer.Ordinal);
     private int _reads;
+    private int _clientReads;
 
     /// <summary>While true, every call throws <see cref="StorageUnavailableException"/>.</summary>
     public bool Unavailable { get; set; }
 
     /// <summary>How many times <see cref="FindKeyAsync"/> reached the store.</summary>
     public int Reads => Volatile.Read(ref _reads);
+
+    /// <summary>How many times <see cref="GetClientAsync"/> reached the store.</summary>
+    public int ClientReads => Volatile.Read(ref _clientReads);
 
     public IReadOnlyCollection<ApiKeyInfo> Keys
     {
@@ -51,6 +55,7 @@ public sealed class InMemoryClientKeyStore : IClientKeyStore
 
     public Task<ClientInfo?> GetClientAsync(string clientId, CancellationToken ct)
     {
+        Interlocked.Increment(ref _clientReads);
         ThrowIfUnavailable();
         lock (_lock)
             return Task.FromResult(_clients.GetValueOrDefault(clientId));

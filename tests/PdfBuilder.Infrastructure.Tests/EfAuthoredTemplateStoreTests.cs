@@ -1,5 +1,6 @@
 using PdfBuilder.Domain.Exceptions;
 using PdfBuilder.Domain.Templates;
+using PdfBuilder.Infrastructure.Persistence;
 using PdfBuilder.Infrastructure.Templates;
 using PdfBuilder.TestSupport;
 
@@ -22,13 +23,19 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static EfAuthoredTemplateStore StoreOn(TestDatabase database) => new(database.CreateContext());
+    /// <summary>A store for one client, on a context of its own: what a request or a restart looks like to it.</summary>
+    private static EfAuthoredTemplateStore StoreOn(TestDatabase database, string? clientId = "alpha")
+    {
+        var caller = new FixedCurrentClient(clientId);
+        return new EfAuthoredTemplateStore(database.CreateContext(caller), new ClientScope(caller));
+    }
 
     [Fact]
     public async Task Reads_back_exactly_what_was_stored_after_a_restart()
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         var template = AuthoredTemplate.Create("letter", Content, Now).Publish(1, Now);
 
         await StoreOn(database).AddAsync(template, Ct);
@@ -42,6 +49,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         var published = AuthoredTemplate.Create("letter", Content, Now).Publish(1, Now);
         await StoreOn(database).AddAsync(published, Ct);
 
@@ -59,6 +67,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
 
         Assert.Empty(await StoreOn(database).ListAsync(Ct));
         Assert.Null(await StoreOn(database).GetAsync("letter", Ct));
@@ -69,6 +78,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         await StoreOn(database).AddAsync(AuthoredTemplate.Create("letter", Content, Now), Ct);
 
         await Assert.ThrowsAsync<TemplateKeyTakenException>(() =>
@@ -80,6 +90,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         await StoreOn(database).AddAsync(AuthoredTemplate.Create("Invoice", Content, Now), Ct);
 
         await Assert.ThrowsAsync<TemplateKeyTakenException>(() =>
@@ -95,6 +106,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         await StoreOn(database).AddAsync(AuthoredTemplate.Create("letter", Content, Now), Ct);
 
         // One context, as in one request: a refused add followed by a valid one.
@@ -111,6 +123,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         var original = AuthoredTemplate.Create("letter", Content, Now);
         await StoreOn(database).AddAsync(original, Ct);
 
@@ -131,6 +144,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         var original = AuthoredTemplate.Create("letter", Content, Now);
         await StoreOn(database).AddAsync(original, Ct);
         await StoreOn(database).DeleteAsync("letter", Ct);
@@ -144,6 +158,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         var original = AuthoredTemplate.Create("letter", Content, Now);
         await StoreOn(database).AddAsync(original, Ct);
 
@@ -170,6 +185,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         var draft = AuthoredTemplate.Create("letter", Content, Now);
         var instanceA = StoreOn(database);
         var instanceB = StoreOn(database);
@@ -186,6 +202,7 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
         await StoreOn(database).AddAsync(AuthoredTemplate.Create("letter", Content, Now), Ct);
 
         Assert.True(await StoreOn(database).DeleteAsync("letter", Ct));
@@ -202,8 +219,93 @@ public sealed class EfAuthoredTemplateStoreTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
 
         Assert.Null(await StoreOn(database).GetAsync(key, Ct));
         Assert.False(await StoreOn(database).DeleteAsync(key, Ct));
+    }
+
+    // ---- Feature 003: templates belong to the client that created them -----------------------------
+
+    [Fact]
+    public async Task Each_client_lists_only_its_own_templates()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
+        await StoreOn(database, "alpha").AddAsync(AuthoredTemplate.Create("letter", Content, Now), Ct);
+        await StoreOn(database, "beta").AddAsync(AuthoredTemplate.Create("receipt", Content, Now), Ct);
+
+        Assert.Equal(["letter"], (await StoreOn(database, "alpha").ListAsync(Ct)).Select(t => t.Key));
+        Assert.Equal(["receipt"], (await StoreOn(database, "beta").ListAsync(Ct)).Select(t => t.Key));
+    }
+
+    [Fact]
+    public async Task Another_clients_template_cannot_be_read_changed_or_deleted_and_is_left_as_it_was()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
+        var published = AuthoredTemplate.Create("letter", Content, Now).Publish(1, Now);
+        await StoreOn(database, "alpha").AddAsync(published, Ct);
+        var edited = published.SaveDraft(Content with { Html = "<p>hijacked</p>" }, published.Revision, Now.AddMinutes(1));
+
+        var beta = StoreOn(database, "beta");
+
+        Assert.Null(await beta.GetAsync("letter", Ct));
+        // Not "someone else saved first": to beta the template does not exist at all.
+        await Assert.ThrowsAsync<TemplateNotFoundException>(() => beta.UpdateAsync(edited, published.Revision, Ct));
+        Assert.False(await beta.DeleteAsync("letter", Ct));
+
+        Assert.Equal(published, await StoreOn(database, "alpha").GetAsync("letter", Ct));
+    }
+
+    [Fact]
+    public async Task Two_clients_can_each_have_a_template_with_the_same_key_and_change_them_independently()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
+        var alphas = AuthoredTemplate.Create("invoice", Content with { Html = "<p>alpha</p>" }, Now);
+        var betas = AuthoredTemplate.Create("invoice", Content with { Html = "<p>beta</p>" }, Now);
+
+        await StoreOn(database, "alpha").AddAsync(alphas, Ct);
+        await StoreOn(database, "beta").AddAsync(betas, Ct);
+
+        // Deleting one leaves the other.
+        Assert.True(await StoreOn(database, "alpha").DeleteAsync("invoice", Ct));
+        Assert.Null(await StoreOn(database, "alpha").GetAsync("invoice", Ct));
+        Assert.Equal("<p>beta</p>", (await StoreOn(database, "beta").GetAsync("invoice", Ct))!.Draft.Html);
+    }
+
+    [Fact]
+    public async Task Within_a_client_a_key_is_taken_in_any_letter_case_but_another_client_may_use_it()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
+        await StoreOn(database, "alpha").AddAsync(AuthoredTemplate.Create("invoice", Content, Now), Ct);
+
+        await Assert.ThrowsAsync<TemplateKeyTakenException>(() =>
+            StoreOn(database, "alpha").AddAsync(AuthoredTemplate.Create("Invoice", Content, Now), Ct));
+
+        await StoreOn(database, "beta").AddAsync(AuthoredTemplate.Create("INVOICE", Content, Now), Ct);
+        Assert.Equal(["INVOICE"], (await StoreOn(database, "beta").ListAsync(Ct)).Select(t => t.Key));
+    }
+
+    [Fact]
+    public async Task With_no_client_nothing_is_listed_and_nothing_can_be_added()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
+        await StoreOn(database, "alpha").AddAsync(AuthoredTemplate.Create("letter", Content, Now), Ct);
+
+        var nobody = StoreOn(database, clientId: null);
+
+        Assert.Empty(await nobody.ListAsync(Ct));
+        Assert.Null(await nobody.GetAsync("letter", Ct));
+        await Assert.ThrowsAsync<ClientRequiredException>(() =>
+            nobody.AddAsync(AuthoredTemplate.Create("other", Content, Now), Ct));
     }
 }

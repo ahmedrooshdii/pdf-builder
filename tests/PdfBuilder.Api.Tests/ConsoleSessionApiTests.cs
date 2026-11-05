@@ -22,7 +22,10 @@ public sealed class ConsoleSessionApiTests(PostgresFixture postgres)
         PostgresFixture.SkipUnlessEnabled();
         await using var api = await ApiFactory.StartAsync(postgres);
         var cookie = await api.SignInAsync(Ct);
-        using var session = api.SessionClient(cookie);
+        await api.EnsureClientAsync("ecommerce", Ct);
+
+        // The operator works inside a client: templates and jobs belong to one (feature 003).
+        using var session = api.SessionClient(cookie, actingAs: "ecommerce");
 
         Assert.Equal(HttpStatusCode.OK, (await session.GetAsync("/api/admin/clients", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await session.GetAsync("/api/templates", Ct)).StatusCode);
@@ -109,8 +112,7 @@ public sealed class ConsoleSessionApiTests(PostgresFixture postgres)
     {
         PostgresFixture.SkipUnlessEnabled();
         await using var api = await ApiFactory.StartAsync(postgres);
-        using var admin = api.AdminClient();
-        admin.DefaultRequestHeaders.Add("X-Client-Id", "ecommerce");
+        using var admin = await api.AdminActingAsAsync("ecommerce", Ct);
 
         Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/templates", Ct)).StatusCode);
 

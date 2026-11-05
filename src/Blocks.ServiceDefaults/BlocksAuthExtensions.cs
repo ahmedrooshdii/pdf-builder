@@ -54,6 +54,15 @@ public static class BlocksAuthExtensions
                 .ValidateOnStart();
             services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<BlocksAuthOptions>, BlocksAuthOptionsValidator>());
 
+            services.AddOptions<BlocksBusOptions>()
+                .Configure<IConfiguration>((options, configuration) =>
+                {
+                    var configured = configuration[BlocksBusOptions.DefaultClientIdKey];
+                    options.DefaultClientId = string.IsNullOrWhiteSpace(configured) ? null : configured;
+                })
+                .ValidateOnStart();
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<BlocksBusOptions>, BlocksBusOptionsValidator>());
+
             // Forwarded headers are believed only from the proxies the operator names.
             services.AddOptions<ForwardedHeadersOptions>()
                 .Configure<IOptions<BlocksAuthOptions>>((forwarded, blocks) =>
@@ -72,7 +81,12 @@ public static class BlocksAuthExtensions
             services.TryAddSingleton<KeyUsageRecorder>();
             services.TryAddSingleton<SignInThrottle>();
             services.AddHostedService<KeyUsageFlushService>();
-            services.TryAddScoped<ICurrentClient, HttpCurrentClient>();
+            // One CurrentClient per scope answers both interfaces: the request's caller, unless a bus
+            // consumer has told the scope which client it acts as.
+            services.TryAddScoped<HttpCurrentClient>();
+            services.TryAddScoped<CurrentClient>();
+            services.TryAddScoped<ICurrentClient>(provider => provider.GetRequiredService<CurrentClient>());
+            services.TryAddScoped<IClientContext>(provider => provider.GetRequiredService<CurrentClient>());
             services.TryAddEnumerable(
                 ServiceDescriptor.Singleton<IConfigureOptions<CookieAuthenticationOptions>, ConsoleSessionCookie>());
 

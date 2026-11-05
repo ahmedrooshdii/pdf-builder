@@ -62,6 +62,38 @@ Little Lemur caps you at 3 connections, 100 queues and a modest message rate. Ma
 connection, and this service declares a handful of queues, so the limits are not the constraint —
 throughput is. It is a development broker, not a production one.
 
+## Bus
+
+```json
+"Blocks": {
+  "Bus": {
+    "DefaultClientId": "ecommerce"
+  }
+}
+```
+
+Environment variable: `Blocks__Bus__DefaultClientId`. Optional; unset by default.
+
+Templates and jobs belong to the client that created them. This setting names one client, and it has two
+uses:
+
+- **Messages that name no client.** A message published to RabbitMQ is handled for the client in its
+  `ClientId` member. A publisher built before that member existed (any `PdfBuilder.Contracts` before 1.2.0)
+  sends none, and its messages are handled for this client, so they keep working. Without the setting
+  such a message is answered `VALIDATION_FAILED`, and nothing is rendered. See
+  [message-contracts.md](message-contracts.md#clientid).
+- **Data from before clients existed.** Templates and jobs that a version without clients created have no
+  owner. On the first start after the upgrade they are all given to this client, once, and the client is
+  registered, named by its id, if it is not registered yet. **If there are such templates or jobs and the
+  setting is not set, the service does not start**; the message names the setting and nothing has been
+  changed. A fresh install, or a database with none, needs nothing. See
+  [operations.md](operations.md#upgrading-to-per-client-templates-and-jobs).
+
+It must be a client id: a lowercase letter followed by up to 39 lowercase letters, digits or hyphens. A
+value that is not one stops the service at start-up, naming the setting. An empty value is the same as
+unset. The client may be disabled: its data is then kept and hidden, and bus messages for it are answered
+`CLIENT_DISABLED` until it is enabled again.
+
 ## Playwright
 
 ```json

@@ -33,4 +33,7 @@ public sealed class GeneratePdfRequest : IGeneratePdfRequest
 
     /// <inheritdoc />
     public PdfPageSetup? PageSetup { get; set; }
+
+    /// <inheritdoc />
+    public string? ClientId { get; set; }
 }

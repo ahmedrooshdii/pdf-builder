@@ -63,6 +63,11 @@ services:
       # Blocks__ForwardedHeaders__KnownNetworks: 172.16.0.0/12
       # How long a console sign-in lasts, from sign-in (00:05:00 to 24:00:00; default 12 hours).
       # Blocks__Console__SessionLifetime: "12:00:00"
+      # The client that messages published to RabbitMQ naming none are handled for (every publisher built
+      # before client ids), and the owner given, once, to templates and jobs from before clients existed.
+      # Empty is fine on a fresh install. An existing deployment that has templates or jobs must set it before
+      # upgrading or the service refuses to start: docs/operations.md, "Upgrading to per-client templates and jobs".
+      Blocks__Bus__DefaultClientId: ${DEFAULT_CLIENT_ID:-}
 
       Storage__RootPath: /data/files
       TemplateStore__RootPath: /app/Templates
