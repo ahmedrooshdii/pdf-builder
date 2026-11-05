@@ -114,6 +114,66 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Blocks.ServiceDefaults.EntityFramework.ConsoleSessionRecord", b =>
+                {
+                    b.Property<byte[]>("IdHash")
+                        .HasColumnType("bytea")
+                        .HasColumnName("id_hash");
+
+                    b.Property<byte[]>("AdminKeyFingerprint")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("admin_key_fingerprint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.HasKey("IdHash")
+                        .HasName("pk_console_sessions");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_console_sessions_expires_at");
+
+                    b.ToTable("console_sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_console_sessions_fingerprint_length", "octet_length(admin_key_fingerprint) = 16");
+
+                            t.HasCheckConstraint("ck_console_sessions_id_hash_length", "octet_length(id_hash) = 32");
+                        });
+                });
+
+            modelBuilder.Entity("Blocks.ServiceDefaults.EntityFramework.DataProtectionKeyRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("FriendlyName")
+                        .HasColumnType("text")
+                        .HasColumnName("friendly_name");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("text")
+                        .HasColumnName("xml");
+
+                    b.HasKey("Id")
+                        .HasName("pk_data_protection_keys");
+
+                    b.ToTable("data_protection_keys", (string)null);
+                });
+
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
                 {
                     b.Property<long>("Id")

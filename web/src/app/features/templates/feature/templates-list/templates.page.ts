@@ -3,6 +3,7 @@ import { Component, inject, signal } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { ClientContext } from '../../../../core/client-context/client-context';
 import { toProblemDetails } from '../../../../core/http/problem-details';
 import { isUsable } from '../../../../shared/data-access/template.models';
 import { TemplatesApi } from '../../../../shared/data-access/templates.api';
@@ -34,7 +35,9 @@ export class TemplatesPage {
   private readonly api = inject(TemplatesApi);
   private readonly router = inject(Router);
 
-  protected readonly templates = rxResource({ stream: () => this.api.list() });
+  /** The chosen client: templates are listed and created on its behalf, and the list reloads when it changes. */
+  protected readonly client = inject(ClientContext).current;
+  protected readonly templates = rxResource({ params: () => this.client() ?? '', stream: () => this.api.list() });
   protected readonly isUsable = isUsable;
 
   protected readonly creating = signal(false);

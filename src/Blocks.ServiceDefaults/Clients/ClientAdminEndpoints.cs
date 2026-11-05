@@ -61,7 +61,17 @@ internal static class ClientAdminEndpoints
             .WithName("RevokeKey")
             .WithSummary("Revoke a key, permanently")
             .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapGet("/api/admin/scopes", ListScopes)
+            .WithTags("Admin")
+            .RequirePermission(BlocksClaims.AdminScope)
+            .WithName("ListScopes")
+            .WithSummary("The permissions a key of this block can be given, with what each allows");
     }
+
+    private static Ok<ListResponse<ScopeResponse>> ListScopes(IOptions<BlocksAuthOptions> blocks) =>
+        TypedResults.Ok(new ListResponse<ScopeResponse>(
+            blocks.Value.PermissionDescriptors.Select(p => new ScopeResponse(p.Name, p.Description)).ToList()));
 
     private static async Task<IResult> CreateClientAsync(
         CreateClientRequest request, IClientKeyStore store, TimeProvider clock, ILoggerFactory loggers, CancellationToken ct)

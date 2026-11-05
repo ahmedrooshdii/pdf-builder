@@ -70,8 +70,8 @@ every readable file, once, and logs `Imported N authored template(s) from …`. 
 
 From this version every call to `/api` needs an `X-Api-Key`, and there is no setting that turns this
 off. A product that sends no key is refused with `401 AUTH_REQUIRED` from the moment the new version
-starts, and so is the web console until its sign-in ships (feature 004, released together with
-this). So, in this order:
+starts. The web console signs in with the admin key instead (see [Console sign-in](#console-sign-in)).
+So, in this order:
 
 1. Generate the admin key on your own machine (`dotnet run --project tools/Blocks.Cli -- admin-key`)
    and set its hash in the deployment ([configuration.md](configuration.md#admin-key)).
@@ -100,12 +100,46 @@ Everything below is done with the admin key against `/api/admin/clients…`; eve
   revocation, a disable or an enable reaches every instance within a minute. A key's expiry is exact.
 - **Before revoking an old key**, check `lastUsedAt` in the key list: it is accurate to the minute,
   and `null` means never used.
-- **Rotating the admin key.** Generate a new one, change `Blocks:Admin:KeyHash`, restart. The old key
-  stops working at once. Client keys are not affected.
+- **Rotating the admin key.** Generate a new one, change `Blocks:Admin:KeyHash` on every instance,
+  restart. The old key stops working at once, and every console session signed in with it ends at its
+  next request. Client keys are not affected.
 - **Logs.** Every log line of an accepted request carries `ClientId` and `KeyId`, or `Admin = true`.
   Issuing, revoking, registering, disabling and enabling are logged at Information. No log line
   contains a key, and refusals for bad keys are logged below Warning, so a scan of invented keys
   cannot flood the logs.
+
+## Console sign-in
+
+The web console asks for the admin key once and gets a session; it shows nothing to a browser
+without one. Everything the management calls above do, the console's **API keys** and **Clients**
+pages do too: create a key (shown once, with a copy button), see when each was last used, revoke
+with confirmation, add, disable and enable clients. The client being worked on is in the header and
+in the address, and every request is made on its behalf (`X-Client-Id`).
+
+- **A session lasts 12 hours** from sign-in (`Blocks:Console:SessionLifetime`), however much it is
+  used, and survives reloads, restarts and other instances. Sign out from the session menu.
+- **Signing out, or replacing the admin key, ends a session everywhere at once.** Each session is a
+  row in `console_sessions` keyed by a hash of an id only the cookie carries; it is checked on every
+  console request, without a cache. A copied cookie stops working with the sign-out.
+- **Failed sign-ins** are limited to 5 a minute per address, per instance (`429 RATE_LIMITED` with
+  `Retry-After`). Behind a reverse proxy, list it in `Blocks:ForwardedHeaders:KnownNetworks`, or every
+  browser counts as the proxy and one person's typos lock everyone out for that minute. The admin key
+  is 238 random bits; the limit is against noise and scanners, not what makes guessing hopeless.
+- **Serving.** The console and the API must reach the browser from **one site** (one origin through a
+  proxy, as `web/nginx/` does) and over **HTTPS**; plain HTTP works only on `localhost`, where browsers
+  accept `Secure` cookies. Do not embed the console in another site's frame: the `SameSite=Strict`
+  cookie is not sent there.
+- **Cross-site protection.** Every change made with a session must carry `X-Console: 1`, which a page
+  on another site cannot send; without it the answer is `403 CONSOLE_HEADER_REQUIRED`.
+- **The Data Protection warning.** At start-up ASP.NET logs that its keys are stored unencrypted. That
+  is expected: the key ring that protects the cookie is in `data_protection_keys`, shared by every
+  instance. Someone who can read the database still cannot make a working cookie, because a session
+  also needs a live row whose id is only in the cookie.
+- **Logs.** Sign-in and sign-out are logged at Information; refused sign-ins below Warning, never with
+  the value sent. Requests under a session carry `Admin = true`, and `ClientId` when the console is
+  working within a client.
+- **During a database outage** sign-in answers "try again" (`503 STORAGE_UNAVAILABLE`), never "key not
+  accepted", and a signed-in console keeps its session for when the database is back.
 
 ## Health
 

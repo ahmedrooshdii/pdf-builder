@@ -1,5 +1,9 @@
 <header class="grid gap-1">
-  <h1 class="text-2xl font-semibold tracking-tight">New PDF</h1>
+  <h1 class="text-2xl font-semibold tracking-tight">
+    New PDF@if (client(); as id) {
+      for <code class="font-mono">{{ id }}</code>
+    }
+  </h1>
   <p class="text-sm text-muted-foreground">
     Pick a published template and give it the JSON to fill in. The PDF renders in the background.
   </p>

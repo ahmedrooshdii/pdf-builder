@@ -28,6 +28,7 @@ import { Select, SelectOption } from '../../../../shared/ui/select';
 import { Icon } from '../../../../shared/ui/icon';
 import { PageSetupForm, validPageOptions } from '../../../../shared/ui/page-setup-form';
 import { Switch } from '../../../../shared/ui/switch';
+import { ClientContext } from '../../../../core/client-context/client-context';
 import { JobHistoryStore } from '../../data-access/job-history.store';
 import { parsePayload } from '../../data-access/parse-payload';
 import { PageSetup, pageSetupBetween, pendingJob } from '../../data-access/pdf-job.models';
@@ -65,12 +66,14 @@ export class NewJobPage {
   private readonly templatesApi = inject(TemplatesApi);
   private readonly history = inject(JobHistoryStore);
   private readonly router = inject(Router);
+  /** The chosen client, named in the page header: jobs are submitted on its behalf. */
+  protected readonly client = inject(ClientContext).current;
 
   /** `?template=` from the URL, set by the "Generate a PDF" links on the templates pages. */
   readonly template = input<string>();
 
   /** Every template a job can use right now: published ones and built-ins. Drafts are left out. */
-  protected readonly templates = rxResource({ stream: () => this.templatesApi.list() });
+  protected readonly templates = rxResource({ params: () => this.client() ?? '', stream: () => this.templatesApi.list() });
   protected readonly templateOptions = computed<readonly SelectOption[]>(() => {
     if (!this.templates.hasValue()) {
       // Until the list arrives, show the preselected key rather than an empty trigger.

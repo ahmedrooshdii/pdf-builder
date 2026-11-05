@@ -25,7 +25,12 @@ internal sealed class ClientLogScopeMiddleware(RequestDelegate next, ILogger<Cli
     private static Dictionary<string, object>? Describe(ICurrentClient caller)
     {
         if (caller.IsAdmin)
-            return new Dictionary<string, object> { ["Admin"] = true };
+        {
+            var scope = new Dictionary<string, object> { ["Admin"] = true };
+            if (caller.ClientId is not null)
+                scope["ClientId"] = caller.ClientId;
+            return scope;
+        }
 
         if (caller.ClientId is null)
             return null;

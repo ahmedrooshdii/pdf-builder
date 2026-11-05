@@ -6,7 +6,10 @@ namespace Blocks.ServiceDefaults.Identity;
 /// </summary>
 public interface ICurrentClient
 {
-    /// <summary>The client behind the key; null for the admin key and for anonymous requests.</summary>
+    /// <summary>
+    /// The client behind the key; for the operator (admin key or console session), the client named in
+    /// <c>X-Client-Id</c>, or null when the operator is not acting as a client; null for anonymous requests.
+    /// </summary>
     string? ClientId { get; }
 
     /// <summary>The public id of the key; null for the admin key and for anonymous requests.</summary>

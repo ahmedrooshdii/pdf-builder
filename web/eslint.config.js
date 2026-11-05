@@ -25,7 +25,8 @@ const layering = [
     },
   },
   {
-    files: ['src/app/features/*/ui/**/*.ts'],
+    // A feature sits at features/<name>/ or, for the console studs, at features/console/<name>/.
+    files: ['src/app/features/*/ui/**/*.ts', 'src/app/features/console/*/ui/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -43,7 +44,7 @@ const layering = [
     },
   },
   {
-    files: ['src/app/features/*/data-access/**/*.ts'],
+    files: ['src/app/features/*/data-access/**/*.ts', 'src/app/features/console/*/data-access/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -53,15 +54,17 @@ const layering = [
   },
   {
     // Inside features/<name>/, climbing three levels lands in features/ itself: that is a sibling feature.
+    // The console's features sit one level deeper (features/console/<name>/), so a sibling may also be
+    // reached as console/<name>/… or by climbing four levels.
     files: ['src/app/features/**/*.ts'],
-    ignores: ['src/app/features/*/*.routes.ts'],
+    ignores: ['src/app/features/*/*.routes.ts', 'src/app/features/console/*/*.routes.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
         {
           // The same climb also reaches src/app/shared and src/app/core, which are always allowed.
           selector:
-            'ImportDeclaration[source.value=/^(\\.\\.\\/){2,3}(?!\\.\\.|shared\\/|core\\/)[^/]+\\/(data-access|feature|ui)\\//]',
+            'ImportDeclaration[source.value=/^(\\.\\.\\/){2,4}(?!\\.\\.|shared\\/|core\\/)([^/]+\\/)?[^/]+\\/(data-access|feature|ui)\\//]',
           message: 'Features must not import from each other. Move shared code to src/app/shared.',
         },
       ],

@@ -35,7 +35,10 @@ public sealed class MigrationTests(PostgresFixture postgres)
 
         Assert.Empty(await context.Database.GetPendingMigrationsAsync(Ct));
         Assert.Equal(
-            ["api_keys", "authored_templates", "clients", "inbox_state", "outbox_message", "outbox_state", "pdf_jobs", "template_imports"],
+            [
+                "api_keys", "authored_templates", "clients", "console_sessions", "data_protection_keys",
+                "inbox_state", "outbox_message", "outbox_state", "pdf_jobs", "template_imports"
+            ],
             await TablesAsync(empty));
     }
 

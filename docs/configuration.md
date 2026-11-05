@@ -138,6 +138,28 @@ Where each deployment gets it:
 Health checks (`/health/live`, `/health/ready`) and file downloads (`/files/{fileId}`) need no key.
 Issuing keys, permissions and refusals: [operations.md](operations.md#api-keys).
 
+## Console sign-in
+
+The web console signs in with the admin key and gets a session cookie (`HttpOnly`, `Secure`,
+`SameSite=Strict`). The key is sent once and never kept by the browser. Both settings are optional.
+
+```json
+"Blocks": {
+  "Console": { "SessionLifetime": "12:00:00" },
+  "ForwardedHeaders": { "KnownNetworks": "172.16.0.0/12" }
+}
+```
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `Blocks:Console:SessionLifetime` | `12:00:00` | How long a sign-in lasts, counted from sign-in and never extended by use. `00:05:00` to `24:00:00`; anything else, or a value that is not a time span, stops start-up naming this setting. Environment form: `Blocks__Console__SessionLifetime`. |
+| `Blocks:ForwardedHeaders:KnownNetworks` | unset (loopback only) | Comma-separated CIDRs of the reverse proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` are believed. Failed sign-ins are limited to 5 a minute **per address**; behind a proxy that is not listed here, every browser counts as the proxy, so one person's typos lock everyone out for a minute. An entry that is not a CIDR stops start-up naming this setting. Environment form: `Blocks__ForwardedHeaders__KnownNetworks`. |
+
+`compose.yaml` sets `KnownNetworks` to Docker's default address pools (`172.16.0.0/12,192.168.0.0/16`),
+because the console's nginx reaches the API over the Compose network. Replacing `Blocks:Admin:KeyHash`
+ends every console session at its next request. Serving requirements (HTTPS, one site):
+[operations.md](operations.md#console-sign-in).
+
 ## Storage
 
 ```json

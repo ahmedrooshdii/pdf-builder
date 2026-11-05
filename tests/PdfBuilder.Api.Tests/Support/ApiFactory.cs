@@ -30,11 +30,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly TestDatabase _database;
     private readonly string _dataRoot = Path.Combine(Path.GetTempPath(), $"pdf-builder-api-tests-{Guid.NewGuid():N}");
     private readonly Action<IServiceCollection>? _configure;
+    private readonly bool _ownsDatabase;
+    private readonly string _adminKeyHash;
 
-    private ApiFactory(TestDatabase database, Action<IServiceCollection>? configure)
+    private ApiFactory(TestDatabase database, Action<IServiceCollection>? configure, bool ownsDatabase, string? adminKeyHash)
     {
         _database = database;
         _configure = configure;
+        _ownsDatabase = ownsDatabase;
+        _adminKeyHash = adminKeyHash ?? KeyHasher.HashAdminKey(AdminKey);
     }
 
     public TestDatabase Database => _database;
@@ -46,9 +50,50 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     {
         ArgumentNullException.ThrowIfNull(postgres);
 
-        var factory = new ApiFactory(await postgres.CreateDatabaseAsync(), configure);
+        var factory = new ApiFactory(await postgres.CreateDatabaseAsync(), configure, ownsDatabase: true, adminKeyHash: null);
         _ = factory.Server;     // starts the host, so a start-up failure surfaces here
         return factory;
+    }
+
+    /// <summary>
+    /// Another instance of the service over <paramref name="database"/>, which it does not drop: two of
+    /// these are two instances behind one database, or one instance restarted.
+    /// <paramref name="adminKeyHash"/> replaces the configured admin key hash.
+    /// </summary>
+    public static ApiFactory StartOn(TestDatabase database, string? adminKeyHash = null)
+    {
+        var factory = new ApiFactory(database, configure: null, ownsDatabase: false, adminKeyHash);
+        _ = factory.Server;
+        return factory;
+    }
+
+    /// <summary>Signs in with the admin key and returns the console cookie as <c>name=value</c>.</summary>
+    public async Task<string> SignInAsync(CancellationToken ct)
+    {
+        using var client = CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/console/session")
+        {
+            Content = JsonContent.Create(new { adminKey = AdminKey })
+        };
+        request.Headers.Add(ConsoleSessionDefaults.HeaderName, ConsoleSessionDefaults.HeaderValue);
+
+        using var response = await client.SendAsync(request, ct);
+        Assert.Equal(204, (int)response.StatusCode);
+        return response.Headers.GetValues("Set-Cookie")
+            .Single(v => v.StartsWith(ConsoleSessionDefaults.CookieName("pdf") + "=", StringComparison.Ordinal))
+            .Split(';', 2)[0];
+    }
+
+    /// <summary>
+    /// A client sending the console cookie and <c>X-Console: 1</c>. The test server speaks plain HTTP, where
+    /// a browser would not send a <c>Secure</c> cookie, so the header is set by hand.
+    /// </summary>
+    public HttpClient SessionClient(string cookie)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        client.DefaultRequestHeaders.Add(ConsoleSessionDefaults.HeaderName, ConsoleSessionDefaults.HeaderValue);
+        return client;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -57,7 +102,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
         builder.UseEnvironment("Production");
         builder.UseSetting($"ConnectionStrings:{DatabaseOptions.ConnectionStringName}", _database.ConnectionString);
-        builder.UseSetting(BlocksAuthOptions.AdminKeyHashKey, KeyHasher.HashAdminKey(AdminKey));
+        builder.UseSetting(BlocksAuthOptions.AdminKeyHashKey, _adminKeyHash);
         builder.UseSetting("Storage:RootPath", Path.Combine(_dataRoot, "files"));
         builder.UseSetting("TemplateStore:RootPath", Path.Combine(RepositoryRoot(), "templates"));
         builder.UseSetting("TemplateStore:AuthoredRootPath", Path.Combine(_dataRoot, "templates"));
@@ -105,7 +150,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
-        await _database.DisposeAsync();
+        if (_ownsDatabase)
+            await _database.DisposeAsync();
 
         if (Directory.Exists(_dataRoot))
             Directory.Delete(_dataRoot, recursive: true);

@@ -54,16 +54,25 @@ dotnet blocks key create ecommerce --block pdf --name production --scopes pdf:ge
 
 The CLI talks to the block's admin API with the admin key; it never touches a database directly.
 
-**Built so far** (feature 002, `specs/002-clients-and-api-keys`): one scheme, `ApiKey`, serves both
-key kinds, telling them apart by prefix; `AdminKey` and `ConsoleSession` as separate schemes behind
-the `Blocks` policy scheme arrive with the console sign-in (feature 004), without changing the key
-handler. The code lives in `src/Blocks.ServiceDefaults` (handler, permission policies with a fallback
-policy that closes every endpoint not marked anonymous, `/api/admin/clients…`, `ICurrentClient`, the
-`ClientId`/`KeyId` log scope) and `src/Blocks.ServiceDefaults.EntityFramework` (`clients`,
-`api_keys`, the store), referenced by PDF Builder until feature 011 moves them to `blocks-platform`.
-`tools/Blocks.Cli` has only `admin-key`; client and key commands wait for 011, and until then the
-management API is called directly (`samples/admin.http`). The admin lists return the list envelope
-with `items` only, and the admin `POST`s take no `Idempotency-Key`, until those studs exist.
+**Built so far** (features 002 and 004, `specs/002-clients-and-api-keys`,
+`specs/004-console-sign-in-keys`): the `Blocks` policy scheme is the default and forwards to `ApiKey`
+when `X-Api-Key` is present or the console cookie is absent, otherwise to `ConsoleSession`. There is
+**no separate `AdminKey` scheme**: the one key handler tells admin and client keys apart by prefix,
+which is all a second scheme would do. `ConsoleSession` is ASP.NET cookie authentication validated on
+every request against a `console_sessions` row (below); its principal has the admin key's claims.
+The code lives in `src/Blocks.ServiceDefaults` (handlers, permission policies with a fallback policy
+that closes every endpoint not marked anonymous, `/api/admin/clients…`, `/api/admin/scopes`,
+`/api/console/session`, the `X-Console` and `X-Client-Id` middleware, `ICurrentClient`, the
+`ClientId`/`KeyId` log scope; `UseBlocksAuthentication()` adds them in order) and
+`src/Blocks.ServiceDefaults.EntityFramework` (`clients`, `api_keys`, `console_sessions`,
+`data_protection_keys`, the stores, and a Data Protection key repository written there rather than
+taken from `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore`, whose package brings a second
+copy of Data Protection and its cryptography packages beside the shared framework's), referenced by
+PDF Builder until feature 011 moves them to `blocks-platform`. `tools/Blocks.Cli` has only
+`admin-key`; client and key commands wait for 011, and until then the management API is called
+directly (`samples/admin.http`) or from the console. The admin lists return the list envelope with
+`items` only (the console shows them whole; shared paging now arrives with the server-side jobs
+list, 010), and the admin `POST`s take no `Idempotency-Key`, until those studs exist.
 
 #### Scopes
 
@@ -81,6 +90,9 @@ Policies are named after scopes: `.RequireAuthorization("pdf:generate")`.
 The admin has no `client_id`. On client-scoped endpoints an admin sends `X-Client-Id: ecommerce`,
 which is honoured **only** for principals with the `admin` scope and ignored for everyone else. This
 is how the console works inside the selected client using the same endpoints products use.
+Built in 004: `ICurrentClient.ClientId` is that value for the admin; a malformed one (not a client
+id, or sent twice) from the admin is `400 VALIDATION_FAILED`; whether the client exists is left to
+client-scoped data (003), which answers 404 for an unknown one.
 
 #### `ICurrentClient`
 
@@ -104,10 +116,22 @@ GET    /api/console/session                              → 200 { "expiresAt": 
 DELETE /api/console/session                              → 204, cookie cleared
 ```
 
-- Cookie: `HttpOnly`, `Secure`, `SameSite=Strict`, 12-hour absolute lifetime, no sliding.
-- Cookie-authenticated requests that change state must carry `X-Console: 1`. A cross-site form
-  cannot set a custom header, so this, with `SameSite=Strict`, is the CSRF defence.
-- Failed sign-ins are rate-limited per IP (5 per minute).
+- Cookie `blocks.{blockCode}.console`: `HttpOnly`, `Secure`, `SameSite=Strict`, 12-hour absolute
+  lifetime (`Blocks:Console:SessionLifetime`), no sliding.
+- Each sign-in writes a `console_sessions` row keyed by `SHA-256(sid)`, where `sid` is a 256-bit
+  random id inside the protected cookie, with the expiry and a fingerprint of the configured admin
+  key hash. Every cookie request checks the row (no cache), so sign-out (`revoked_at`) and a replaced
+  admin key end a session on every instance at once, and a database reader cannot forge a cookie that
+  matches a live row. The cookie's key ring is in `data_protection_keys` (application name
+  `blocks.{blockCode}`), so every instance opens it and it survives restarts.
+- Cookie-authenticated requests that change state, and sign-in and sign-out, must carry
+  `X-Console: 1`, or get `403 CONSOLE_HEADER_REQUIRED`. A cross-site form cannot set a custom header,
+  so this, with `SameSite=Strict`, is the CSRF defence.
+- Failed sign-ins are limited per address (5 per minute, per instance) with `429 RATE_LIMITED`; the
+  address comes from `X-Forwarded-For` only from proxies listed in
+  `Blocks:ForwardedHeaders:KnownNetworks`.
+- `GET /api/admin/scopes` lists the permissions a key can have, with the description the block
+  declares, so the console's create form cannot drift from the service.
 
 ### Problem details
 
@@ -137,12 +161,13 @@ Stud codes, shared by every block:
 | 401 | `AUTH_INVALID_KEY` | Unknown, revoked or expired key. Deliberately not more specific. |
 | 403 | `AUTH_SCOPE_MISSING` | Valid key without the scope this endpoint needs. |
 | 403 | `CLIENT_DISABLED` | The client is disabled. |
+| 403 | `CONSOLE_HEADER_REQUIRED` | A cookie-authenticated change, or a console sign-in or sign-out, without `X-Console: 1`. |
 | 404 | (block code or none) | Not found **or belongs to another client**. Never 403 for that. |
 | 404 | `CLIENT_NOT_FOUND` | Management API: no client has this id. |
 | 404 | `KEY_NOT_FOUND` | Management API: the client has no key with this id. |
 | 409 | `CLIENT_ID_TAKEN` | Management API: client ids are permanent and never reused. |
 | 422 | `IDEMPOTENCY_KEY_REUSED` | Same `Idempotency-Key`, different body. |
-| 429 | `RATE_LIMITED` | Over the client's limit. Carries `Retry-After`. |
+| 429 | `RATE_LIMITED` | Over the client's limit, or too many failed console sign-ins from one address. Carries `Retry-After`. |
 | 503 | `STORAGE_UNAVAILABLE` | The block's database is unreachable, including while checking a key. Carries `Retry-After`. Never answered as `AUTH_INVALID_KEY`. |
 
 A block's own codes (`TEMPLATE_NOT_FOUND`, `TEMPLATE_KEY_TAKEN`, …) sit alongside these. Codes are
@@ -271,6 +296,8 @@ Studs use the `Blocks` section, so every block is configured the same way:
 | --- | --- | --- |
 | `ConnectionStrings:Database` | – | Required. The block's own database. |
 | `Blocks:Admin:KeyHash` | – | Required. Lowercase hex SHA-256 of the admin key, from `dotnet blocks admin-key` (today `dotnet run --project tools/Blocks.Cli -- admin-key`). |
+| `Blocks:Console:SessionLifetime` | `12:00:00` | How long a console sign-in lasts, from sign-in, never extended. `00:05:00` to `24:00:00`. |
+| `Blocks:ForwardedHeaders:KnownNetworks` | – | Comma-separated CIDRs of reverse proxies whose forwarded headers are believed (the console's sign-in limit is per address). Unset = loopback only. |
 | `Blocks:Files:SigningKey` | – | Required. 32+ random bytes, base64. |
 | `Blocks:Files:UrlLifetime` | `01:00:00` | |
 | `Blocks:Files:RetentionDays` | `30` | |

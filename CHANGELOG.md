@@ -36,6 +36,36 @@ matching.
 - A job submitted over HTTP whose render failed on every retry stayed `Pending` forever. The last
   attempt now marks it `Failed` with `RENDER_FAILED`. Bus requesters still receive a `Fault<T>`.
 
+### Added (service): console sign-in and key management
+
+Released together with API keys (below), so the web console keeps working: it signs in with the
+admin key instead of sending none. The package, the messages and the existing error codes are
+unchanged, and the contracts version does not change for this.
+
+- **The console signs in with the admin key** (`POST /api/console/session`) and gets a 12-hour session
+  in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie; `GET` says when it ends and `DELETE` signs out.
+  Sessions are stored as rows keyed by a hash, so signing out, or replacing the admin key, ends a
+  session on every instance at once, and a copied cookie stops working. Failed sign-ins are limited
+  to 5 a minute per address.
+- **The console is closed** to anyone without a session, and works within a chosen client: a switcher
+  in the header, the client in the address, every request made on its behalf.
+- **API keys and clients in the console:** list keys with when each was last used, create one (shown
+  once, with a copy button, in a dialog that cannot be dismissed by accident), revoke with
+  confirmation; add, disable and enable clients.
+- **New:** `GET /api/admin/scopes` (the permissions a key can have, with descriptions); the optional
+  `X-Client-Id` header, honoured only for the operator, to act as a client; codes
+  `403 CONSOLE_HEADER_REQUIRED` (a cookie-authenticated change without `X-Console: 1`) and
+  `429 RATE_LIMITED` (with `Retry-After`).
+- **New settings, both optional:** `Blocks:Console:SessionLifetime` (default `12:00:00`) and
+  `Blocks:ForwardedHeaders:KnownNetworks` (the reverse proxies to believe). Two new tables,
+  `console_sessions` and `data_protection_keys`, are created by the migration at start-up.
+
+#### Upgrading
+
+- Serve the console over HTTPS (plain HTTP works only on `localhost`), from the same site as the API,
+  and not inside another site's frame. Behind a reverse proxy, set
+  `Blocks__ForwardedHeaders__KnownNetworks`. See [docs/operations.md](docs/operations.md#console-sign-in).
+
 ### Changed (service): API keys — breaking for callers without a key
 
 The package and the messages are unchanged, and the contracts version does not change for this.

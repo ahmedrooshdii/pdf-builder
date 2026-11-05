@@ -17,6 +17,8 @@ public static class BlocksProblemCodes
     public const string ClientNotFound = "CLIENT_NOT_FOUND";
     public const string KeyNotFound = "KEY_NOT_FOUND";
     public const string ClientIdTaken = "CLIENT_ID_TAKEN";
+    public const string ConsoleHeaderRequired = "CONSOLE_HEADER_REQUIRED";
+    public const string RateLimited = "RATE_LIMITED";
 }
 
 /// <summary>
@@ -76,6 +78,18 @@ internal static class BlocksProblems
         "Client id taken",
         "A client with this id already exists. Client ids are permanent and never reused.",
         BlocksProblemCodes.ClientIdTaken);
+
+    public static ProblemDetails ConsoleHeaderRequired() => Create(
+        StatusCodes.Status403Forbidden,
+        "Console header required",
+        $"Changes made with a console session must carry {Authentication.ConsoleSessionDefaults.HeaderName}: {Authentication.ConsoleSessionDefaults.HeaderValue}.",
+        BlocksProblemCodes.ConsoleHeaderRequired);
+
+    public static ProblemDetails RateLimited() => Create(
+        StatusCodes.Status429TooManyRequests,
+        "Too many attempts",
+        "Too many failed sign-ins from this address. Try again later.",
+        BlocksProblemCodes.RateLimited);
 
     public static HttpValidationProblemDetails Validation(IDictionary<string, string[]> errors) => new(errors)
     {

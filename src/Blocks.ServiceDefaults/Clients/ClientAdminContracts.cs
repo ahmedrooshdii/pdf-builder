@@ -15,6 +15,9 @@ internal sealed record IssueKeyRequest(string? Name, IReadOnlyList<string>? Scop
 /// <summary>The stud list envelope. Paging members join it, additively, when shared paging exists.</summary>
 internal sealed record ListResponse<T>(IReadOnlyList<T> Items);
 
+/// <summary>A permission a key can be given, as <c>GET /api/admin/scopes</c> lists it.</summary>
+internal sealed record ScopeResponse(string Name, string Description);
+
 internal sealed record ClientResponse(string Id, string Name, string Status, DateTimeOffset CreatedAt, DateTimeOffset? DisabledAt)
 {
     public static ClientResponse From(ClientInfo client) => new(

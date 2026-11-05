@@ -15,6 +15,11 @@ export interface PdfJob {
   readonly sizeBytes: number | null;
   readonly errorCode: string | null;
   readonly errorMessage: string | null;
+  /**
+   * The client the job was submitted for. Recorded by the console's job history, not sent by the
+   * API; absent on entries saved before console sign-in, which then belong to no client.
+   */
+  readonly clientId?: string;
 }
 
 /**
