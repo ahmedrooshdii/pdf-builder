@@ -12,6 +12,8 @@ function job(n: number, status: PdfJobStatus = 'Succeeded', templateKey = 'invoi
     completedAt: null,
     fileId: null,
     fileUrl: null,
+    fileUrlExpiresAt: null,
+    fileExpired: false,
     sizeBytes: n * 1000,
     errorCode: null,
     errorMessage: null,
@@ -22,7 +24,6 @@ function setup(jobs: PdfJob[]) {
   TestBed.configureTestingModule({ providers: [provideRouter([])] });
   const fixture = TestBed.createComponent(JobsTable);
   fixture.componentRef.setInput('jobs', jobs);
-  fixture.componentRef.setInput('downloadUrlFor', (id: string) => `/files/${id}`);
   TestBed.tick();
 
   const el: HTMLElement = fixture.nativeElement;
@@ -49,6 +50,28 @@ function setup(jobs: PdfJob[]) {
 }
 
 describe('JobsTable', () => {
+  it('asks for the download of a succeeded job and shows no link to a file', () => {
+    const withFile: PdfJob = { ...job(1), fileId: 'a7e0495b0c1d4e2f8a9b0c1d2e3f4a5b' };
+    const { fixture, el, click } = setup([withFile]);
+    const asked: PdfJob[] = [];
+    fixture.componentInstance.download.subscribe((j) => asked.push(j));
+
+    const download = el.querySelector<HTMLButtonElement>('button[aria-label="Download PDF of job job-01"]');
+    if (!download) throw new Error('No download button.');
+    click(download);
+
+    expect(asked).toEqual([withFile]);
+    expect(el.querySelector('a[href*="/files/"]')).toBeNull();
+  });
+
+  it('shows Expired instead of a download when the file is gone', () => {
+    const gone: PdfJob = { ...job(1), fileId: 'a7e0495b0c1d4e2f8a9b0c1d2e3f4a5b', fileExpired: true };
+    const { el } = setup([gone]);
+
+    expect(el.querySelector('button[aria-label^="Download PDF"]')).toBeNull();
+    expect(el.textContent).toContain('Expired');
+  });
+
   it('pages through rows ten at a time, newest first', () => {
     const jobs = Array.from({ length: 12 }, (_, i) => job(i + 1));
     const { el, button, click } = setup(jobs);

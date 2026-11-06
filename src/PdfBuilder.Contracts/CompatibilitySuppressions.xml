@@ -29,4 +29,18 @@
     <Right>lib/netstandard2.0/PdfBuilder.Contracts.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
   </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0006</DiagnosticId>
+    <Target>P:PdfBuilder.Contracts.IGeneratePdfResponse.FileUrlExpiresAt</Target>
+    <Left>lib/net10.0/PdfBuilder.Contracts.dll</Left>
+    <Right>lib/net10.0/PdfBuilder.Contracts.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0006</DiagnosticId>
+    <Target>P:PdfBuilder.Contracts.IGeneratePdfResponse.FileUrlExpiresAt</Target>
+    <Left>lib/netstandard2.0/PdfBuilder.Contracts.dll</Left>
+    <Right>lib/netstandard2.0/PdfBuilder.Contracts.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
 </Suppressions>

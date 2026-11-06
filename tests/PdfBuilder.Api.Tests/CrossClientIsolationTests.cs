@@ -160,7 +160,7 @@ public sealed class CrossClientIsolationTests(PostgresFixture postgres)
 
         // A job endpoint added later (a list, a file link) has to be added here, with its cross-client case.
         Assert.Equal(
-            ["GET /api/pdf/jobs/{jobId:guid}", "POST /api/pdf/jobs/"],
+            ["GET /api/pdf/jobs/{jobId:guid}", "GET /api/pdf/jobs/{jobId:guid}/file", "GET /api/pdf/jobs/{jobId:guid}/file-url", "POST /api/pdf/jobs/"],
             RoutesUnder(api.Services, "/api/pdf/jobs").Order(StringComparer.Ordinal));
     }
 
@@ -199,5 +199,41 @@ public sealed class CrossClientIsolationTests(PostgresFixture postgres)
         // Alpha still reads its own, finished.
         var finished = await alpha.GetFromJsonAsync<JsonElement>($"/api/pdf/jobs/{jobId}", Ct);
         Assert.Equal("Succeeded", finished.GetProperty("status").GetString());
+    }
+
+    // ---- Feature 005: another client's job file --------------------------------------------------------
+
+    [Fact]
+    public async Task Another_clients_job_file_and_fresh_link_answer_exactly_like_a_job_that_never_existed()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var api = await ApiFactory.StartAsync(postgres, services =>
+            services.AddSingleton<PdfBuilder.Application.Abstractions.IPdfRenderer>(new RecordingRenderer()));
+        using var alpha = await api.ClientForAsync("alpha", Ct);
+        using var beta = await api.ClientForAsync("beta", Ct);
+        using var operatorAsBeta = await api.AdminActingAsAsync("beta", Ct);
+        var jobId = await ApiFactory.SubmitJobAsync(alpha, "invoice", new { }, Ct);
+        await ApiFactory.WaitForJobAsync(alpha, jobId, Ct);
+
+        // The owner can have both, so the refusals below are about ownership and nothing else.
+        using var ownLink = await alpha.GetAsync($"/api/pdf/jobs/{jobId}/file-url", Ct);
+        using var ownFile = await alpha.GetAsync($"/api/pdf/jobs/{jobId}/file", Ct);
+        Assert.Equal(HttpStatusCode.OK, ownLink.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, ownFile.StatusCode);
+
+        foreach (var (name, caller) in new[] { ("beta's key", beta), ("the operator acting as beta", operatorAsBeta) })
+        {
+            foreach (var route in new[] { "file-url", "file" })
+            {
+                var neverExisted = Guid.NewGuid();
+                using var theirs = await caller.GetAsync($"/api/pdf/jobs/{jobId}/{route}", Ct);
+                using var missing = await caller.GetAsync($"/api/pdf/jobs/{neverExisted}/{route}", Ct);
+
+                var otherClientsJob = (await SnapshotAsync(theirs)).Replace(jobId.ToString(), "{id}", StringComparison.OrdinalIgnoreCase);
+                var unknownJob = (await SnapshotAsync(missing)).Replace(neverExisted.ToString(), "{id}", StringComparison.OrdinalIgnoreCase);
+                Assert.True(unknownJob.StartsWith("404 ", StringComparison.Ordinal), $"{name} {route}: {unknownJob}");
+                Assert.Equal(unknownJob, otherClientsJob);
+            }
+        }
     }
 }

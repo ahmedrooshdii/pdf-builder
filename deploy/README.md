@@ -98,6 +98,7 @@ RABBITMQ_CONNECTION_STRING=amqps://user:pass@host.rmq.cloudamqp.com/vhost
 PUBLIC_BASE_URL=https://pdf.example.com
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 ADMIN_KEY_HASH=<the hash printed by admin-key, see below>
+FILES_SIGNING_KEY=$(openssl rand -base64 32)
 EOF
 chmod 600 /opt/pdf-builder/.env
 ```
@@ -116,6 +117,21 @@ naming the variable, if it is missing. To replace the key, generate a new one, c
 `docker compose up -d`: the old key stops working at once. Then register clients and issue their
 keys with the calls in [samples/admin.http](../samples/admin.http), **before** pointing any product
 at this version: a product that sends no key is refused.
+
+`FILES_SIGNING_KEY` signs the links to generated PDFs. It is required: the service refuses to start
+without it, and the deploy fails its health check naming the setting. Use a value from `openssl rand -base64 32`
+(as above) or `dotnet run --project tools/Blocks.Cli -- file-signing-key`, and keep a copy in your password
+manager. Replacing it ends every link handed out so far, which is also how you revoke them all.
+
+Two settings in `deploy/compose.prod.yaml` are commented out because their defaults are right for most
+installs. `Blocks__Files__RequireSignature` decides what a link is: off (the default), links are the plain
+`/files/{fileId}` and never expire, as before; on, every link is signed, stops working after
+`Blocks__Files__UrlLifetime` (one hour by default), and unsigned links are refused. Switch it on once the
+products that call this service ask for a fresh link instead of keeping one (`GET /api/pdf/jobs/{id}/file-url`).
+The next release turns it on by default. `Blocks__Files__RetentionDays` (30 by default) deletes a PDF that
+many days after it was made, **whichever way the switch is set**: the first start of this version deletes
+every file older than that, so set it to `3650` before upgrading if you want to keep them all for now, and
+take a backup first.
 
 `DEFAULT_CLIENT_ID` is optional on a new install and required when you upgrade a server that already has
 templates or jobs. Templates and jobs belong to the client that created them, and the ones that exist

@@ -28,6 +28,8 @@ public sealed class PermissionTests(PostgresFixture postgres)
     {
         ["POST /api/pdf/jobs/"] = Generate,
         ["GET /api/pdf/jobs/{jobId:guid}"] = Generate,
+        ["GET /api/pdf/jobs/{jobId:guid}/file-url"] = Generate,
+        ["GET /api/pdf/jobs/{jobId:guid}/file"] = Generate,
         ["GET /api/templates/"] = Read,
         ["GET /api/templates/{templateKey}"] = Read,
         ["POST /api/templates/"] = Write,

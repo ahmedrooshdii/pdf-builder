@@ -61,6 +61,8 @@ services:
       # templates and jobs from before clients existed. `samples/admin.http` registers this one. A fresh stack
       # needs no value at all; it is here so the stack accepts messages from publishers older than client ids.
       Blocks__Bus__DefaultClientId: ecommerce
+      # development only: generate your own for any real deployment
+      Blocks__Files__SigningKey: dGVzdC1maWxlLXNpZ25pbmcta2V5LTAxMjM0NTY3ODlhYmNkZWY=
     volumes:
       - pdf-data:/data
       # Edit a template on the host and the next render picks it up, no rebuild needed.

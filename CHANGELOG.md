@@ -4,6 +4,50 @@ Releases of the `PdfBuilder.Contracts` NuGet package. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/). Each release is the git tag `contracts-v<version>`.
 
+## [Unreleased] — 1.3.0
+
+Additive: producers and consumers on 1.0.0 to 1.2.0 keep matching. The message type, its namespace and
+therefore its exchange name are unchanged.
+
+### Added
+
+- `IGeneratePdfResponse.FileUrlExpiresAt`: when `FileUrl` stops working. Null when the deployment does not
+  sign links, and on failure. A 1.2.0 consumer ignores it. `FileUrl`'s documentation now says what it is: signed
+  and expiring when the deployment requires it, plain otherwise. See
+  [docs/message-contracts.md](docs/message-contracts.md#downloading-the-pdf).
+
+### Added (service): private, expiring files
+
+- **Signed, expiring links, behind `Blocks:Files:RequireSignature`.** Off for now, so links behave as before:
+  the plain `/files/{fileId}`, no expiry. On, every link carries `expires` and `sig`, works without a key until
+  `Blocks:Files:UrlLifetime` (an hour by default) has passed, and an altered, expired or unsigned link answers
+  the same bare `404` as a file that does not exist. **The next release turns this on by default.** A product
+  that keeps a link past its expiry must ask for a fresh one.
+- **`GET /api/pdf/jobs/{id}/file-url`** returns a fresh link for a job you own (`pdf:generate`). `404` for a job
+  that is not yours or does not exist (identical), `409 JOB_HAS_NO_FILE` for a job that failed, `410 FILE_EXPIRED`
+  once the file is deleted. Earlier links keep working until they expire.
+- **`GET /api/pdf/jobs/{id}/file`** downloads the PDF with your key, no link involved. The console now uses it
+  for Download and Preview, so it never holds a link.
+- **Job status** (`GET /api/pdf/jobs/{id}`) gains `fileUrlExpiresAt` and `fileExpired`. `fileUrl` is made for
+  each response, and is null once the file expired.
+- **Retention.** PDFs are deleted `Blocks:Files:RetentionDays` (30 by default) after they were made, **whichever
+  way the switch is set**. **The first start of this version deletes every file older than that.** To keep
+  everything for now, set it to `3650` before upgrading. A succeeded job is kept as long as its file, then for
+  `JobStore:RetentionHours` more, so a poller is told `fileExpired` instead of "not found".
+- **New required setting: `Blocks:Files:SigningKey`** (base64 of at least 32 bytes; generate one with
+  `dotnet run --project tools/Blocks.Cli -- file-signing-key`). The service does not start without it, naming the
+  setting, before the database is touched. The deployment files and `compose.yaml` set it.
+- **Migration `AddFileLifetime`**: records when each job's file was made (from when the job completed) and drops
+  the stored link. See [docs/operations.md](docs/operations.md#upgrading-to-private-files), which has the SQL if you
+  apply migrations yourself.
+
+### Changed (service)
+
+- Signatures never reach a log: the request log (`Microsoft.AspNetCore.Hosting.Diagnostics`) is pinned to
+  `Warning`. A reverse proxy's access log still records the query string: drop `sig` there.
+- Several instances starting together are now serialised through a database lock for the whole upgrade, so one
+  instance's start cannot undo the migrations another has just applied.
+
 ## [Unreleased] — 1.2.0
 
 Additive: producers and consumers on 1.0.0 or 1.1.0 keep matching. The message type, its namespace and

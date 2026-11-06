@@ -19,8 +19,17 @@ public sealed record PdfJob
 
     public DateTimeOffset? CompletedAt { get; init; }
     public string? FileId { get; init; }
-    public string? FileUrl { get; init; }
     public long? SizeBytes { get; init; }
+
+    /// <summary>When the PDF was written. Retention is counted from here. Null unless the job succeeded.</summary>
+    public DateTimeOffset? FileCreatedAt { get; init; }
+
+    /// <summary>
+    /// The file was deleted after its retention period, or is gone from storage. Links are made per read
+    /// from <see cref="FileId"/>; none is stored.
+    /// </summary>
+    public bool FileExpired { get; init; }
+
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
 
@@ -32,12 +41,13 @@ public sealed record PdfJob
         EnqueuedAt = enqueuedAt
     };
 
-    public PdfJob Succeed(string fileId, string fileUrl, long sizeBytes, DateTimeOffset completedAt) => this with
+    public PdfJob Succeed(string fileId, long sizeBytes, DateTimeOffset fileCreatedAt, DateTimeOffset completedAt) => this with
     {
         Status = PdfJobStatus.Succeeded,
         FileId = fileId,
-        FileUrl = fileUrl,
         SizeBytes = sizeBytes,
+        FileCreatedAt = fileCreatedAt,
+        FileExpired = false,
         CompletedAt = completedAt,
         ErrorCode = null,
         ErrorMessage = null
@@ -50,7 +60,13 @@ public sealed record PdfJob
         ErrorMessage = errorMessage,
         CompletedAt = completedAt,
         FileId = null,
-        FileUrl = null,
+        FileCreatedAt = null,
+        FileExpired = false,
         SizeBytes = null
     };
+
+    /// <summary>The same job, reporting that its file is gone. Only a succeeded job has a file to lose.</summary>
+    public PdfJob WithFileExpired() => Status == PdfJobStatus.Succeeded
+        ? this with { FileExpired = true }
+        : throw new InvalidOperationException("Only a succeeded job has a file that can expire.");
 }

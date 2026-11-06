@@ -1,5 +1,5 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
-import { rxResource, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import { rxResource, takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { DomSanitizer } from '@angular/platform-browser';
 import { RouterLink } from '@angular/router';
 import { interval, map, of, startWith, switchMap, tap } from 'rxjs';
@@ -11,6 +11,7 @@ import { DIALOG } from '../../../../shared/ui/dialog';
 import { PROGRESS, Skeleton, Spinner } from '../../../../shared/ui/feedback';
 import { Icon } from '../../../../shared/ui/icon';
 import { toObjectUrl } from '../../../../shared/util/object-url';
+import { saveBlob } from '../../../../shared/util/save-blob';
 import { JobHistoryStore } from '../../data-access/job-history.store';
 import { JobPoller } from '../../data-access/job-poller';
 import { JOB_RETENTION_HOURS } from '../../data-access/pdf-job.models';
@@ -44,6 +45,7 @@ export class JobDetailPage {
   private readonly poller = inject(JobPoller);
   private readonly history = inject(JobHistoryStore);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Bound from the `:jobId` route parameter. */
   readonly jobId = input.required<string>();
@@ -88,15 +90,20 @@ export class JobDetailPage {
     Math.round(95 * (1 - Math.exp(-this.elapsedMs() / EXPECTED_RENDER_MS))),
   );
 
-  private readonly fileId = computed(() => {
+  /** The job has a file the service still holds, as far as this page knows. */
+  protected readonly canDownload = computed(() => {
     const job = this.current();
-    return job?.status === 'Succeeded' ? job.fileId : null;
+    return job?.status === 'Succeeded' && !!job.fileId && !this.expired();
   });
 
-  protected readonly downloadUrl = computed(() => {
-    const fileId = this.fileId();
-    return fileId ? this.api.fileUrl(fileId) : null;
-  });
+  /** A download or the preview was answered 410: the file is gone, whatever the job said when it was read. */
+  private readonly foundExpired = signal(false);
+
+  /** The file was deleted after the retention period, or is gone from storage. */
+  protected readonly expired = computed(() => this.current()?.fileExpired === true || this.foundExpired());
+
+  protected readonly downloading = signal(false);
+  protected readonly downloadFailed = signal(false);
 
   protected readonly downloadName = computed(() => {
     const job = this.current();
@@ -104,13 +111,47 @@ export class JobDetailPage {
   });
 
   /**
+   * Fetches the PDF with the console's own credentials and hands it to the browser. No `/files/` link is
+   * involved, so there is nothing to expire and nothing that could be copied out of the address bar.
+   */
+  protected download(): void {
+    const name = this.downloadName();
+    if (!name || this.downloading()) return;
+
+    this.downloading.set(true);
+    this.downloadFailed.set(false);
+    this.api
+      .downloadFile(this.jobId())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (blob) => {
+          this.downloading.set(false);
+          saveBlob(blob, name);
+        },
+        error: (error: unknown) => {
+          this.downloading.set(false);
+          if (toProblemDetails(error).status === 410) this.foundExpired.set(true);
+          else this.downloadFailed.set(true);
+        },
+      });
+  }
+
+  /**
    * The PDF as an object URL, fetched only while the preview is open. The API serves files as
-   * `attachment`, so an iframe pointed at the download URL would download instead of display.
+   * `attachment`, so an iframe pointed at a link would download instead of display.
    * Closing the preview, or moving to another job, ends the subscription and revokes the URL.
    */
   protected readonly preview = rxResource({
-    params: () => (this.previewOpen() ? (this.fileId() ?? undefined) : undefined),
-    stream: ({ params: fileId }) => this.api.download(fileId).pipe(toObjectUrl()),
+    params: () => (this.previewOpen() && this.canDownload() ? this.jobId() : undefined),
+    stream: ({ params: jobId }) =>
+      this.api.downloadFile(jobId).pipe(
+        tap({
+          error: (error: unknown) => {
+            if (toProblemDetails(error).status === 410) this.foundExpired.set(true);
+          },
+        }),
+        toObjectUrl(),
+      ),
   });
 
   /** Only ever an object URL this page created from bytes it downloaded itself, so safe to frame. */

@@ -12,6 +12,10 @@ export interface PdfJob {
   readonly completedAt: string | null;
   readonly fileId: string | null;
   readonly fileUrl: string | null;
+  /** When `fileUrl` stops working; null when the service does not sign links. Absent on entries saved before this existed. */
+  readonly fileUrlExpiresAt?: string | null;
+  /** The file was deleted after the retention period or is gone from storage. Absent on older entries, meaning no. */
+  readonly fileExpired?: boolean;
   readonly sizeBytes: number | null;
   readonly errorCode: string | null;
   readonly errorMessage: string | null;
@@ -82,10 +86,19 @@ export const PdfErrorCodes = {
   RenderFailed: 'RENDER_FAILED',
 } as const;
 
+/** HTTP-only codes of the job file endpoints (they never travel on the bus). */
+export const JobFileErrorCodes = {
+  FileExpired: 'FILE_EXPIRED',
+  JobHasNoFile: 'JOB_HAS_NO_FILE',
+} as const;
+
 /** Mirrors `GeneratePdfCommandValidator.MaxPayloadBytes`. */
 export const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024;
 
-/** How long the API keeps job state (`JobStore:RetentionHours`). Older ids answer 404. */
+/**
+ * How long the API keeps job state (`JobStore:RetentionHours`). Older ids answer 404. A succeeded job is kept
+ * as long as its file, then for this long.
+ */
 export const JOB_RETENTION_HOURS = 24;
 
 export function isTerminal(status: PdfJobStatus): boolean {
@@ -102,6 +115,8 @@ export function pendingJob(accepted: JobAccepted, templateKey: string, enqueuedA
     completedAt: null,
     fileId: null,
     fileUrl: null,
+    fileUrlExpiresAt: null,
+    fileExpired: false,
     sizeBytes: null,
     errorCode: null,
     errorMessage: null,

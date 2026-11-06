@@ -1,9 +1,12 @@
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
+import { toProblemDetails } from '../../../../core/http/problem-details';
 import { Button } from '../../../../shared/ui/button';
 import { Icon } from '../../../../shared/ui/icon';
+import { saveBlob } from '../../../../shared/util/save-blob';
 import { JobHistoryStore } from '../../data-access/job-history.store';
-import { JOB_RETENTION_HOURS } from '../../data-access/pdf-job.models';
+import { JOB_RETENTION_HOURS, PdfJob } from '../../data-access/pdf-job.models';
 import { PdfJobsApi } from '../../data-access/pdf-jobs.api';
 import { JobsTable } from '../../ui/jobs-table/jobs-table';
 
@@ -26,7 +29,7 @@ import { JobsTable } from '../../ui/jobs-table/jobs-table';
     </header>
 
     @if (history.jobs().length > 0) {
-      <app-jobs-table [jobs]="history.jobs()" [downloadUrlFor]="downloadUrlFor" (removed)="remove($event)" />
+      <app-jobs-table [jobs]="history.jobs()" (download)="download($event)" (removed)="remove($event)" />
     } @else {
       <div class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center">
         <div class="flex size-10 items-center justify-center rounded-lg bg-muted">
@@ -50,7 +53,21 @@ export class JobsPage {
   private readonly api = inject(PdfJobsApi);
 
   protected readonly retentionHours = JOB_RETENTION_HOURS;
-  protected readonly downloadUrlFor = (fileId: string): string => this.api.fileUrl(fileId);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** Fetched with the console's own credentials; no link is made. */
+  protected download(job: PdfJob): void {
+    this.api
+      .downloadFile(job.jobId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (blob) => saveBlob(blob, `${job.templateKey}-${job.jobId}.pdf`),
+        // Gone since the job was last read: say so in the table. Any other failure is left to the job page.
+        error: (error: unknown) => {
+          if (toProblemDetails(error).status === 410) this.history.record({ ...job, fileExpired: true });
+        },
+      });
+  }
 
   protected remove(jobIds: readonly string[]): void {
     for (const id of jobIds) this.history.remove(id);

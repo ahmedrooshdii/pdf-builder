@@ -7,7 +7,7 @@
 @host = http://localhost:5052
 
 # A key with pdf:generate, issued with admin.http. Under Docker the published local-only admin key
-# from compose.yaml works too. Health checks and file downloads need no key.
+# from compose.yaml works too. Health checks need no key, and a file link is its own credential.
 @apiKey = pdf_paste-your-key-here
 
 # The admin key, only for the last request in this file: the operator acting as a client. Under Docker it is the
@@ -52,13 +52,39 @@ Content-Type: application/json
 }
 
 
-### Poll the job from the request above.
+### Poll the job from the request above. `fileUrl` is the link to the PDF.
+# With Blocks:Files:RequireSignature on it is signed and `fileUrlExpiresAt` says when it stops working;
+# with it off it is the plain /files/{fileId} and the expiry is null. Use it as-is.
+# @name status
 GET {{host}}/api/pdf/jobs/{{enqueue.response.body.jobId}}
 X-Api-Key: {{apiKey}}
 
 
-### Download the PDF the job produced.
-GET {{host}}/files/{{enqueue.response.body.fileId}}
+### Download the PDF with the link from the status. No key: the link is the credential.
+# After its expiry (signing on), or once the file is deleted, this is a bare 404: ask for a fresh link below.
+GET {{status.response.body.fileUrl}}
+
+
+### Files — a fresh link for a job you own. Earlier links keep working until their own expiry.
+# @name freshLink
+GET {{host}}/api/pdf/jobs/{{enqueue.response.body.jobId}}/file-url
+X-Api-Key: {{apiKey}}
+
+
+### Files — download straight from the API with your key, no link involved.
+GET {{host}}/api/pdf/jobs/{{enqueue.response.body.jobId}}/file
+X-Api-Key: {{apiKey}}
+
+
+### Files — 409 JOB_HAS_NO_FILE: the job failed (see the missing-template request below), so there is no file.
+GET {{host}}/api/pdf/jobs/{{missingTemplate.response.body.jobId}}/file-url
+X-Api-Key: {{apiKey}}
+
+
+### Files — 410 FILE_EXPIRED: the file was deleted after Blocks:Files:RetentionDays.
+# Answered for an old job whose file is gone; the job's own status then says "fileExpired": true.
+GET {{host}}/api/pdf/jobs/{{enqueue.response.body.jobId}}/file-url
+X-Api-Key: {{apiKey}}
 
 
 ### Minimal payload — every optional field omitted.
@@ -195,7 +221,7 @@ GET {{host}}/api/pdf/jobs/00000000-0000-0000-0000-000000000001
 X-Api-Key: {{apiKey}}
 
 
-### 404 — a file id that is not one we hand out.
+### 404 — a file id that is not one we hand out. Also what every altered, expired or unsigned link gets.
 GET {{host}}/files/not-a-real-file-id
 
 

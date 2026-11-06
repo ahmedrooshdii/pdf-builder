@@ -29,12 +29,12 @@ public sealed class GeneratePdfCommandHandlerTests
         _engine.RenderAsync(template.Html, "{\"total\":9}", Arg.Any<CancellationToken>()).Returns("<p>9</p>");
         _renderer.RenderAsync("<p>9</p>", template.Options, Arg.Any<CancellationToken>()).Returns(PdfBytes);
         _storage.SaveAsync(PdfBytes, "application/pdf", Arg.Any<CancellationToken>())
-            .Returns(new StoredFile("abc", "http://localhost/files/abc", PdfBytes.Length));
+            .Returns(new StoredFile("abc", PdfBytes.Length, new DateTimeOffset(2026, 11, 5, 10, 0, 0, TimeSpan.Zero)));
 
         var result = await CreateHandler().Handle(new GeneratePdfCommand("invoice", "{\"total\":9}"), Ct);
 
         Assert.Equal("abc", result.FileId);
-        Assert.Equal("http://localhost/files/abc", result.FileUrl);
+        Assert.Equal(new DateTimeOffset(2026, 11, 5, 10, 0, 0, TimeSpan.Zero), result.FileCreatedAt);
         Assert.Equal(PdfBytes.Length, result.SizeBytes);
     }
 
@@ -47,7 +47,7 @@ public sealed class GeneratePdfCommandHandlerTests
         _engine.RenderAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("<p>x</p>");
         _renderer.RenderAsync(Arg.Any<string>(), Arg.Any<PdfRenderOptions>(), Arg.Any<CancellationToken>()).Returns(PdfBytes);
         _storage.SaveAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new StoredFile("id", "url", 4));
+            .Returns(new StoredFile("id", 4, DateTimeOffset.UnixEpoch));
 
         await CreateHandler().Handle(new GeneratePdfCommand("label", "{}"), Ct);
 
@@ -62,7 +62,7 @@ public sealed class GeneratePdfCommandHandlerTests
         _engine.RenderAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("<p>x</p>");
         _renderer.RenderAsync(Arg.Any<string>(), Arg.Any<PdfRenderOptions>(), Arg.Any<CancellationToken>()).Returns(PdfBytes);
         _storage.SaveAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new StoredFile("id", "url", 4));
+            .Returns(new StoredFile("id", 4, DateTimeOffset.UnixEpoch));
 
         var setup = new PageSetup { Width = "80mm", Height = "200mm" };
         await CreateHandler().Handle(new GeneratePdfCommand("invoice", "{}", setup), Ct);

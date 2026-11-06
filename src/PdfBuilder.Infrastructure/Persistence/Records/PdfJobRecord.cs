@@ -21,7 +21,12 @@ internal sealed class PdfJobRecord
     public DateTimeOffset EnqueuedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public string? FileId { get; set; }
-    public string? FileUrl { get; set; }
+    /// <summary>When the PDF was written; retention is counted from here. Set for every succeeded job.</summary>
+    public DateTimeOffset? FileCreatedAt { get; set; }
+
+    /// <summary>When the file was found deleted or missing. Never cleared once set.</summary>
+    public DateTimeOffset? FileExpiredAt { get; set; }
+
     public long? SizeBytes { get; set; }
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
@@ -41,7 +46,9 @@ internal sealed class PdfJobRecord
         EnqueuedAt = job.EnqueuedAt.ToUniversalTime(),
         CompletedAt = job.CompletedAt?.ToUniversalTime(),
         FileId = job.FileId,
-        FileUrl = job.FileUrl,
+        FileCreatedAt = job.FileCreatedAt?.ToUniversalTime(),
+        // A job that reports its file expired has no timestamp of its own: it was marked in the store.
+        FileExpiredAt = job.FileExpired ? savedAt.ToUniversalTime() : null,
         SizeBytes = job.SizeBytes,
         ErrorCode = job.ErrorCode,
         ErrorMessage = job.ErrorMessage,
@@ -59,7 +66,9 @@ internal sealed class PdfJobRecord
         EnqueuedAt = other.EnqueuedAt;
         CompletedAt = other.CompletedAt;
         FileId = other.FileId;
-        FileUrl = other.FileUrl;
+        FileCreatedAt = other.FileCreatedAt;
+        // A file never comes back: a mark that is set stays, whatever a later save says.
+        FileExpiredAt ??= other.FileExpiredAt;
         SizeBytes = other.SizeBytes;
         ErrorCode = other.ErrorCode;
         ErrorMessage = other.ErrorMessage;
@@ -73,11 +82,13 @@ internal sealed class PdfJobRecord
 
         return Enum.Parse<PdfJobStatus>(Status) switch
         {
-            PdfJobStatus.Succeeded => pending.Succeed(
-                FileId ?? string.Empty, FileUrl ?? string.Empty, SizeBytes ?? 0, CompletedAt ?? EnqueuedAt),
+            PdfJobStatus.Succeeded => Expire(pending.Succeed(
+                FileId ?? string.Empty, SizeBytes ?? 0, FileCreatedAt ?? CompletedAt ?? EnqueuedAt, CompletedAt ?? EnqueuedAt)),
             PdfJobStatus.Failed => pending.Fail(
                 ErrorCode ?? string.Empty, ErrorMessage ?? string.Empty, CompletedAt ?? EnqueuedAt),
             _ => pending
         };
     }
+
+    private PdfJob Expire(PdfJob succeeded) => FileExpiredAt is null ? succeeded : succeeded.WithFileExpired();
 }

@@ -5,6 +5,7 @@ using FluentValidation;
 using MassTransit;
 using MediatR;
 using Microsoft.Extensions.Options;
+using PdfBuilder.Api.Files;
 using PdfBuilder.Application.Abstractions;
 using PdfBuilder.Application.Features.GeneratePdf;
 using PdfBuilder.Contracts;
@@ -23,6 +24,7 @@ public sealed class GeneratePdfConsumer(
     IClientContext clientContext,
     IClientKeyStore clients,
     IOptions<BlocksBusOptions> bus,
+    PdfFileLinks fileLinks,
     TimeProvider clock,
     ILogger<GeneratePdfConsumer> logger)
     : IConsumer<IGeneratePdfRequest>
@@ -73,14 +75,18 @@ public sealed class GeneratePdfConsumer(
                 new GeneratePdfCommand(message.TemplateKey, message.JsonPayload, message.PageSetup.ToDomain()), ct);
 
             await CompleteAsync(context, job => job.Succeed(
-                result.FileId, result.FileUrl, result.SizeBytes, clock.GetUtcNow()));
+                result.FileId, result.SizeBytes, result.FileCreatedAt, clock.GetUtcNow()));
+
+            // The link is made now, for this reply, and is not stored: a holder asks for a fresh one later.
+            var link = fileLinks.For(result.FileId);
 
             await context.RespondAsync<IGeneratePdfResponse>(new
             {
                 message.CorrelationId,
                 IsSuccess = true,
                 result.FileId,
-                result.FileUrl,
+                FileUrl = link.Url,
+                FileUrlExpiresAt = link.ExpiresAt,
                 SizeBytes = (long?)result.SizeBytes,
                 ErrorCode = (string?)null,
                 ErrorMessage = (string?)null,
@@ -153,6 +159,7 @@ public sealed class GeneratePdfConsumer(
             IsSuccess = false,
             FileId = (string?)null,
             FileUrl = (string?)null,
+            FileUrlExpiresAt = (DateTimeOffset?)null,
             SizeBytes = (long?)null,
             ErrorCode = errorCode,
             ErrorMessage = errorMessage,

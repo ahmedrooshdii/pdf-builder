@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Files;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -9,7 +10,7 @@ using PdfBuilder.Infrastructure.Persistence.Records;
 namespace PdfBuilder.Infrastructure.Jobs;
 
 /// <summary>
-/// Deletes job rows that are past <see cref="JobStoreOptions.RetentionHours"/>, once an hour.
+/// Deletes job rows that are no longer readable (see <see cref="JobVisibility"/>), once an hour.
 /// </summary>
 /// <remarks>
 /// Reads already treat such rows as gone, so this only bounds storage. Every instance runs it; a
@@ -18,6 +19,7 @@ namespace PdfBuilder.Infrastructure.Jobs;
 internal sealed class JobRetentionSweeper(
     IServiceScopeFactory scopes,
     IOptions<JobStoreOptions> options,
+    IOptions<BlocksFilesOptions> fileOptions,
     TimeProvider clock,
     ILogger<JobRetentionSweeper> logger) : BackgroundService
 {
@@ -49,12 +51,12 @@ internal sealed class JobRetentionSweeper(
     internal async Task<int> SweepAsync(CancellationToken cancellationToken)
     {
         var hours = options.Value.RetentionHours;
-        var cutoff = clock.GetUtcNow() - TimeSpan.FromHours(hours);
+        var readable = JobVisibility.IsReadable(clock.GetUtcNow(), hours, fileOptions.Value.RetentionDays);
 
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PdfBuilderDbContext>();
 
-        var removed = await DeleteExpiredJobsOfAllClientsAsync(db, cutoff, cancellationToken);
+        var removed = await DeleteExpiredJobsOfAllClientsAsync(db, readable, cancellationToken);
 
         PersistenceLog.JobsSwept(logger, removed, hours);
         return removed;
@@ -66,10 +68,10 @@ internal sealed class JobRetentionSweeper(
     /// places allowed to ignore the filter, and the architecture test lists them (research R2).
     /// </summary>
     private static Task<int> DeleteExpiredJobsOfAllClientsAsync(
-        PdfBuilderDbContext db, DateTimeOffset cutoff, CancellationToken cancellationToken) =>
+        PdfBuilderDbContext db, System.Linq.Expressions.Expression<Func<PdfJobRecord, bool>> readable, CancellationToken cancellationToken) =>
         db.Set<PdfJobRecord>()
             .IgnoreQueryFilters([PdfBuilderDbContext.ClientFilter])
-            .Where(j => j.LastSavedAt < cutoff)
+            .Where(System.Linq.Expressions.Expression.Lambda<Func<PdfJobRecord, bool>>(System.Linq.Expressions.Expression.Not(readable.Body), readable.Parameters))
             .ExecuteDeleteAsync(cancellationToken);
 
     private static async Task<bool> WaitAsync(PeriodicTimer timer, CancellationToken cancellationToken)

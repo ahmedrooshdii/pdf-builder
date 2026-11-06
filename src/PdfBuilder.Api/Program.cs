@@ -1,4 +1,5 @@
 using Blocks.ServiceDefaults;
+using Blocks.ServiceDefaults.Files;
 using PdfBuilder.Api.Endpoints;
 using PdfBuilder.Api.Messaging;
 using PdfBuilder.Api.OpenApi;
@@ -23,7 +24,11 @@ builder.Services
 // that turns this off.
 builder.Services.AddBlocksAuthentication(PdfPermissions.BlockCode, PdfPermissions.Descriptors);
 
+// Signed, expiring file links and file retention. Needs Blocks:Files:SigningKey; the service refuses to start without it.
+builder.Services.AddBlocksFiles();
+
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<PdfBuilder.Api.Files.PdfFileLinks>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 var app = builder.Build();

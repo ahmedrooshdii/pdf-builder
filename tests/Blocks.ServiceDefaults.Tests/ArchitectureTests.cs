@@ -38,6 +38,7 @@ public sealed partial class ArchitectureTests
     private static readonly string[] MethodsAllowedToIgnoreTheClientFilter =
     [
         "DeleteExpiredJobsOfAllClientsAsync",   // the retention sweeper has no caller
+        "MarkExpiredFilesOfAllClientsAsync",    // the file sweeper has no caller
         "AssignUnownedToDefaultClientAsync",    // the upgrade gives old rows their owner
         "ClaimAsync"                            // tells another client's job id from a free one, nothing more
     ];

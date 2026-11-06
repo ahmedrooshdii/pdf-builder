@@ -12,8 +12,15 @@ internal static class PdfJobConfiguration
     public static void Configure(EntityTypeBuilder<PdfJobRecord> job)
     {
         // The three names PdfJobStatus has, as the API returns them. A typo in a writer fails here.
-        job.ToTable("pdf_jobs", table => table.HasCheckConstraint(
-            "ck_pdf_jobs_status", "status IN ('Pending', 'Succeeded', 'Failed')"));
+        job.ToTable("pdf_jobs", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_pdf_jobs_status", "status IN ('Pending', 'Succeeded', 'Failed')");
+
+            // Retention is counted from the file's creation, so a succeeded job must say when that was.
+            table.HasCheckConstraint(
+                "ck_pdf_jobs_file_created_at", "status <> 'Succeeded' OR file_created_at IS NOT NULL");
+        });
 
         job.HasKey(j => j.JobId);
         job.Property(j => j.JobId).ValueGeneratedNever();
@@ -29,5 +36,8 @@ internal static class PdfJobConfiguration
 
         // Retention filters and the sweeper both look at this column.
         job.HasIndex(j => j.LastSavedAt).HasDatabaseName("ix_pdf_jobs_last_saved_at");
+
+        // The file sweeper finds the jobs whose files are past retention by this column.
+        job.HasIndex(j => j.FileCreatedAt).HasDatabaseName("ix_pdf_jobs_file_created_at");
     }
 }

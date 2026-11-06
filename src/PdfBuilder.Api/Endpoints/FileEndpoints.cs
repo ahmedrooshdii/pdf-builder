@@ -1,3 +1,5 @@
+using Blocks.ServiceDefaults.Files;
+using PdfBuilder.Api.Files;
 using PdfBuilder.Application.Abstractions;
 
 namespace PdfBuilder.Api.Endpoints;
@@ -14,21 +16,23 @@ internal static class FileEndpoints
             .WithTags("Files")
             .WithName("DownloadPdf")
             .WithSummary("Download a generated PDF")
+            .WithDescription("The link is the credential. When the deployment signs links, it carries `expires` and `sig` and stops working at `expires`; every other request is answered 404, as for a file that does not exist.")
             .Produces(StatusCodes.Status200OK, contentType: "application/pdf")
             .Produces(StatusCodes.Status404NotFound)
-            // Open until file links become signed and expiring: end users and other services follow
-            // these links, and they have no key.
-            .AllowAnonymous();
+            // Open to anyone holding the link: end users and other services follow these links, and they have
+            // no key. What the link is worth is decided by RequireFileSignature, not by authentication.
+            .AllowAnonymous()
+            .RequireFileSignature();
 
         return app;
     }
 
-    private static async Task<IResult> DownloadAsync(string fileId, IFileStorage storage, CancellationToken ct)
+    private static async Task<IResult> DownloadAsync(string fileId, HttpContext http, IFileStorage storage, CancellationToken ct)
     {
         var stream = await storage.OpenReadAsync(fileId, ct);
 
         return stream is null
             ? Results.NotFound()
-            : Results.File(stream, "application/pdf", $"{fileId}.pdf");
+            : PdfFileResponses.Pdf(http, stream, fileId);
     }
 }

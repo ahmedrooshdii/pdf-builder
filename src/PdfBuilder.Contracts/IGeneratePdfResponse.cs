@@ -16,12 +16,19 @@ public interface IGeneratePdfResponse
     string? FileId { get; }
 
     /// <summary>
-    /// Absolute URL the requester downloads the PDF from with a plain GET. Not signed and does not
-    /// expire; whether it needs credentials depends on how the service is deployed. Null when
+    /// Absolute URL the requester downloads the PDF from with a plain GET, no credentials. When the
+    /// deployment requires signed links, it is signed and stops working at <see cref="FileUrlExpiresAt"/>;
+    /// ask <c>GET /api/pdf/jobs/{CorrelationId}/file-url</c> for a fresh one. Otherwise it is not signed and
+    /// works until the file is deleted after the deployment's retention period. Null when
     /// <see cref="IsSuccess"/> is false.
     /// </summary>
     string? FileUrl { get; }
 
+    /// <summary>
+    /// When <see cref="FileUrl"/> stops working. Null when the deployment does not sign links, and when
+    /// <see cref="IsSuccess"/> is false. New in 1.3.0: a 1.2.0 consumer ignores it.
+    /// </summary>
+    DateTimeOffset? FileUrlExpiresAt { get; }
     /// <summary>Size of the stored PDF in bytes. Null when <see cref="IsSuccess"/> is false.</summary>
     long? SizeBytes { get; }
 

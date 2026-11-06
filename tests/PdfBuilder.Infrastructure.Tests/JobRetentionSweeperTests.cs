@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Files;
 using Blocks.ServiceDefaults.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +22,7 @@ public sealed class JobRetentionSweeperTests(PostgresFixture postgres)
     private static EfPdfJobStore StoreFor(TestDatabase database, string clientId, TestClock clock, IOptions<JobStoreOptions> options)
     {
         var caller = new FixedCurrentClient(clientId);
-        return new EfPdfJobStore(database.CreateContext(caller), new ClientScope(caller), clock, options);
+        return new EfPdfJobStore(database.CreateContext(caller), new ClientScope(caller), clock, options, Options.Create(new BlocksFilesOptions()));
     }
 
     /// <summary>The sweeper runs with no caller, as it does in the service: its scope has a context for nobody.</summary>
@@ -50,7 +51,7 @@ public sealed class JobRetentionSweeperTests(PostgresFixture postgres)
         clock.Now = Now.AddHours(25);
         await using var provider = SweeperProvider(database);
         var sweeper = new JobRetentionSweeper(
-            provider.GetRequiredService<IServiceScopeFactory>(), options, clock, NullLogger<JobRetentionSweeper>.Instance);
+            provider.GetRequiredService<IServiceScopeFactory>(), options, Options.Create(new BlocksFilesOptions()), clock, NullLogger<JobRetentionSweeper>.Instance);
 
         var removed = await sweeper.SweepAsync(Ct);
 
@@ -69,6 +70,7 @@ public sealed class JobRetentionSweeperTests(PostgresFixture postgres)
         var sweeper = new JobRetentionSweeper(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new JobStoreOptions()),
+            Options.Create(new BlocksFilesOptions()),
             new TestClock(Now),
             NullLogger<JobRetentionSweeper>.Instance);
 
@@ -100,7 +102,7 @@ public sealed class JobRetentionSweeperTests(PostgresFixture postgres)
         clock.Now = Now.AddHours(25);
         await using var provider = SweeperProvider(database);
         var sweeper = new JobRetentionSweeper(
-            provider.GetRequiredService<IServiceScopeFactory>(), options, clock, NullLogger<JobRetentionSweeper>.Instance);
+            provider.GetRequiredService<IServiceScopeFactory>(), options, Options.Create(new BlocksFilesOptions()), clock, NullLogger<JobRetentionSweeper>.Instance);
 
         var removed = await sweeper.SweepAsync(Ct);
 
@@ -109,5 +111,44 @@ public sealed class JobRetentionSweeperTests(PostgresFixture postgres)
         await using var beta = database.CreateContext("beta");
         Assert.Equal([recentAlpha.JobId], await alpha.Set<PdfJobRecord>().Select(j => j.JobId).ToListAsync(Ct));
         Assert.Equal([recentBeta.JobId], await beta.Set<PdfJobRecord>().Select(j => j.JobId).ToListAsync(Ct));
+    }
+
+    [Fact]
+    public async Task The_sweeper_keeps_exactly_the_rows_a_read_can_still_find()
+    {
+        // Feature 005: a succeeded job lives as long as its file, then one more job retention period.
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
+        var clock = new TestClock(Now);
+        var options = Options.Create(new JobStoreOptions { RetentionHours = 24 });
+        var store = StoreFor(database, "alpha", clock, options);
+
+        var pending = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now);
+        var kept = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f1", 1, Now, Now);          // file still kept
+        var expiredLately = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f2", 1, Now.AddDays(-30), Now.AddDays(-30));
+        var expiredLongAgo = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f3", 1, Now.AddDays(-32), Now.AddDays(-32));
+        foreach (var job in new[] { pending, kept, expiredLately, expiredLongAgo })
+            await store.SaveAsync(job, Ct);
+
+        // Two days on: the pending job is past its day; `kept` is 2 days old; `expiredLately` expired yesterday
+        // (30 days old at now - 1 day... counted from its file), `expiredLongAgo` expired two days ago and a day is up.
+        clock.Now = Now.AddDays(2);
+        await using var provider = SweeperProvider(database);
+        var sweeper = new JobRetentionSweeper(
+            provider.GetRequiredService<IServiceScopeFactory>(), options, Options.Create(new BlocksFilesOptions()), clock, NullLogger<JobRetentionSweeper>.Instance);
+
+        var readable = new List<Guid>();
+        foreach (var job in new[] { pending, kept, expiredLately, expiredLongAgo })
+            if (await StoreFor(database, "alpha", clock, options).GetAsync(job.JobId, Ct) is not null)
+                readable.Add(job.JobId);
+
+        await sweeper.SweepAsync(Ct);
+
+        await using var check = database.CreateContext("alpha");
+        var remaining = await check.Set<PdfJobRecord>().Select(j => j.JobId).ToListAsync(Ct);
+        Assert.Equal(readable.Order(), remaining.Order());
+        Assert.Contains(kept.JobId, remaining);
+        Assert.DoesNotContain(pending.JobId, remaining);
     }
 }

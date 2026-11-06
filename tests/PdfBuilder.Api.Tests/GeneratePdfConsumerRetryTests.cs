@@ -1,3 +1,4 @@
+using PdfBuilder.Api.Tests.Support;
 using System.Collections.Concurrent;
 using Blocks.ServiceDefaults;
 using Blocks.ServiceDefaults.Clients;
@@ -40,6 +41,8 @@ public sealed class GeneratePdfConsumerRetryTests
         public Task<PdfJob?> GetAsync(Guid jobId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Jobs.TryGetValue(jobId, out var job) ? job : null);
 
+        public Task MarkFileMissingAsync(Guid jobId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public Task<PdfJob> ClaimAsync(Guid jobId, string templateKey, CancellationToken cancellationToken = default) =>
             Task.FromResult(Jobs.GetOrAdd(jobId, _ => PdfJob.Enqueued(jobId, templateKey, DateTimeOffset.UtcNow)));
     }
@@ -63,6 +66,7 @@ public sealed class GeneratePdfConsumerRetryTests
             .AddSingleton<IPdfJobStore>(jobs)
             .AddSingleton(clients)
             .AddSingleton(TimeProvider.System)
+            .AddFileLinks()
             .AddScoped<IClientContext, FixedCurrentClient>()
             .AddSingleton(Options.Create(new BlocksBusOptions { DefaultClientId = "alpha" }))
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))

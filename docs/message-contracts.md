@@ -135,7 +135,8 @@ var request = new GeneratePdfRequest(NewId.NextGuid(), "invoice", json) { Client
 | `CorrelationId` | `Guid` | Echoes the request. |
 | `IsSuccess` | `bool` | |
 | `FileId` | `string?` | Opaque id of the stored PDF. Null on failure. |
-| `FileUrl` | `string?` | Absolute download URL. Null on failure. See [Downloading the PDF](#downloading-the-pdf). |
+| `FileUrl` | `string?` | Absolute download URL, signed and expiring when the deployment requires signed links. Null on failure. See [Downloading the PDF](#downloading-the-pdf). |
+| `FileUrlExpiresAt` | `DateTimeOffset?` | When `FileUrl` stops working. Null when the deployment does not sign links, and on failure. New in 1.3.0; a 1.2.0 consumer ignores it. |
 | `SizeBytes` | `long?` | Null on failure. |
 | `ErrorCode` | `string?` | One of `PdfErrorCodes`. Null on success. |
 | `ErrorMessage` | `string?` | For humans. Do not branch on it; the wording can change. |
@@ -227,18 +228,30 @@ for.
 
 ## Downloading the PDF
 
-`FileUrl` is `{PublicBaseUrl}/files/{FileId}`, where `PublicBaseUrl` is the service's
-`Storage:PublicBaseUrl` setting. Fetch it with a plain `GET`; the body is `application/pdf`.
+`FileUrl` is a link made for this reply from the service's `Storage:PublicBaseUrl` and the file's id. Fetch it
+with a plain `GET`; the body is `application/pdf`. No key, no credentials of your own: the link is the
+credential.
 
-- **No authentication by default.** Anyone who has the URL can download the file, and the
-  service adds no credentials of its own. If your deployment puts a gateway in front of `/files`,
-  that gateway decides what to send.
-- **Not signed and does not expire.** The URL stays valid as long as the file exists.
-- **Retention is a deployment decision.** The service does not delete files. Ask the operators of
-  the instance you call how long they keep them; once a file is gone the URL returns `404`.
-- **A lost URL can be rebuilt** from `FileId` as `{PublicBaseUrl}/files/{FileId}`. There is no
-  message to request a new one, and none is needed.
-- **Reachability** is whatever `PublicBaseUrl` points at: an internal address works only inside
-  that network.
+What the link is depends on the deployment's `Blocks:Files:RequireSignature` setting, and `FileUrlExpiresAt`
+tells you which:
 
-Download promptly and keep your own copy if you need the document long term.
+| Deployment | `FileUrl` | `FileUrlExpiresAt` |
+| --- | --- | --- |
+| Signing required | `…/files/{FileId}?expires=…&sig=…`, stops working at the expiry | The expiry |
+| Not required (the default for now) | `…/files/{FileId}`, as before | `null` |
+
+- **Treat a link as short-lived.** When `FileUrlExpiresAt` is set, download before it, and do not store the URL
+  to use later. If the time has passed, or you did not keep up, ask for a fresh one (below). Altered, expired
+  and unsigned links all answer the same bare `404` as a file that does not exist.
+- **Ask for a fresh link** with `GET /api/pdf/jobs/{CorrelationId}/file-url` and your key (the same key, client
+  and permission as when you submitted the job). It answers `200` with a new `fileUrl` and `fileUrlExpiresAt`;
+  earlier links keep working until their own expiry. `404`: no such job, or it is not yours. `409`
+  `JOB_HAS_NO_FILE`: the job failed. `410` `FILE_EXPIRED`: the file was deleted (below).
+- **Or skip the link** and fetch the file with your key from `GET /api/pdf/jobs/{CorrelationId}/file`.
+- **Files are deleted after the retention period**, `Blocks:Files:RetentionDays` (30 by default), counted from
+  when the PDF was made, whichever way signing is set. After that every link to it is `404`, and the job reports
+  `fileExpired: true` (`410 FILE_EXPIRED` from the two endpoints above) for a while, then is forgotten. Download
+  promptly and keep your own copy if you need the document long term.
+- **A lost URL cannot be rebuilt** from `FileId` when signing is required, because the signature is part of it:
+  ask for a fresh one. When signing is not required it can: `{PublicBaseUrl}/files/{FileId}`.
+- **Reachability** is whatever `PublicBaseUrl` points at: an internal address works only inside that network.

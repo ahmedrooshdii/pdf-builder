@@ -13,12 +13,16 @@
       </div>
     </div>
 
-    @if (downloadUrl(); as url) {
+    @if (canDownload()) {
       <div class="flex gap-2">
-        <a appButton [href]="url" [attr.download]="downloadName()">
-          <app-icon name="download" data-icon="inline-start" />
+        <button appButton type="button" [disabled]="downloading()" (click)="download()">
+          @if (downloading()) {
+            <app-spinner data-icon="inline-start" />
+          } @else {
+            <app-icon name="download" data-icon="inline-start" />
+          }
           Download
-        </a>
+        </button>
         <button appButton type="button" variant="outline" (click)="previewOpen.set(true)">
           <app-icon name="eye" data-icon="inline-start" />
           Preview
@@ -26,6 +30,24 @@
       </div>
     }
   </header>
+
+  @if (expired()) {
+    <div role="status" class="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm">
+      <app-icon name="triangle-alert" class="text-muted-foreground" />
+      <div class="grid flex-1 gap-0.5">
+        <p class="font-medium">File expired</p>
+        <p class="text-muted-foreground">
+          The PDF was deleted after the service's retention period. Submit the job again to get a new one.
+        </p>
+      </div>
+      <a appButton variant="outline" size="sm" routerLink="/jobs/new">
+        <app-icon name="plus" data-icon="inline-start" />
+        New PDF
+      </a>
+    </div>
+  } @else if (downloadFailed()) {
+    <p role="alert" class="text-sm text-destructive">Could not download the PDF. Try again.</p>
+  }
 
   @if (isPending()) {
     <app-progress [value]="estimatedProgress()" ariaLabel="Rendering progress (estimated)">
@@ -81,8 +103,8 @@
       <div class="grid max-w-md gap-1">
         <h1 class="font-medium">Job not found</h1>
         <p class="text-sm text-muted-foreground">
-          The service keeps job status for {{ retentionHours }} hours and in memory only, so this job has
-          either expired or the service restarted since it was submitted.
+          The service keeps a job's status for {{ retentionHours }} hours, and longer for a job whose PDF it still
+          holds. This job is older than that, or was never submitted to this client.
         </p>
       </div>
       <div class="flex gap-2">

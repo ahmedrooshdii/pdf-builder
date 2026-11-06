@@ -42,6 +42,7 @@ itself from [src/PdfBuilder.Api/Dockerfile](../../src/PdfBuilder.Api/Dockerfile)
    | Secret | `RabbitMq__ConnectionString` | The `amqps://` URI from CloudAMQP |
    | Secret | `ConnectionStrings__Database` | The Npgsql connection string of a hosted PostgreSQL, for example `Host=<host>;Database=<db>;Username=<user>;Password=<password>;SSL Mode=Require`. Hosted databases require TLS. |
    | Variable | `Storage__PublicBaseUrl` | `https://<owner>-<space-name>.hf.space` |
+   | Secret | `Blocks__Files__SigningKey` | A key for signing file links: `openssl rand -base64 32` or `dotnet run --project tools/Blocks.Cli -- file-signing-key`. Required: the Space does not start without it. |
    | Secret | `Blocks__Admin__KeyHash` | The hash printed by `dotnet run --project tools/Blocks.Cli -- admin-key`, run on your own machine. Keep the key itself in your password manager: it manages clients and API keys, and only its hash goes in the Space. |
 
    The URL is shown under *⋯ → Embed this Space → Direct URL*. Underscores and capitals in the

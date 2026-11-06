@@ -46,6 +46,7 @@ public static class DependencyInjection
             // share one context per request or message so that a job and its message commit together.
             services.AddScoped<IPdfJobStore, EfPdfJobStore>();
             services.AddHostedService<JobRetentionSweeper>();
+            services.AddHostedService<FileRetentionSweeper>();
 
             services.AddHealthChecks()
                 .AddCheck<TemplateStoreHealthCheck>("template-store", HealthStatus.Unhealthy, tags: ["ready"])

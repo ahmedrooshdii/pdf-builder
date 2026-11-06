@@ -15,7 +15,7 @@ script wraps it; in `requests.http` the wrapping is written out in full.
 
 ## A key first
 
-Every `/api` call needs an API key in the `X-Api-Key` header; health checks and file downloads do
+Every `/api` call needs an API key in the `X-Api-Key` header; health checks and file links do
 not. `admin.http` registers a client and issues it a key with the admin key. Under
 `docker compose up`, the admin key is the published, local-only one written next to its hash in
 `compose.yaml`. With `dotnet run`, generate your own:
@@ -57,7 +57,9 @@ Open it in VS Code with the **REST Client** extension (Rider and Visual Studio s
 natively) and click *Send Request* over any block. It covers the happy path, the optional-field
 cases, and each failure: the three that are refused at the edge with a 400, the one that is
 accepted and then fails in the worker with `TEMPLATE_NOT_FOUND`, and the two refusals for a
-missing or invalid key. Set `@apiKey` at the top first.
+missing or invalid key. A **Files** group covers a fresh link (`/file-url`), the direct download (`/file`) and the
+`409 JOB_HAS_NO_FILE` and `410 FILE_EXPIRED` answers; the download request uses the status's `fileUrl` as it is,
+signed or not. Set `@apiKey` at the top first.
 
 The last section is a walk-through with two clients: templates and jobs belong to the client whose key
 created them, so each client sees only its own, can have its own `statement` template, and gets a 404 for

@@ -36,7 +36,7 @@ HTTP request thread.
                  │                          IPdfJobStore (poll)              IGeneratePdfResponse (bus)  │
                  │                                                                                      │
  HTTP caller ──► │  GET /api/pdf/jobs/{id}  ──► job state       (X-Api-Key, pdf:generate)               │
- HTTP caller ──► │  GET /files/{fileId}     ──► the PDF bytes   (no key until file links are signed)    │
+ HTTP caller ──► │  GET /files/{fileId}     ──► the PDF bytes   (the link is the key; signed)       │
                  └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -146,6 +146,18 @@ Responses carry a `FileUrl`, never the bytes. A 2 MB invoice through RabbitMQ wo
 broker being used as a file server: slow, memory-hungry, and bounded by frame size limits.
 `GET /files/{fileId}` is the redemption half.
 
+The link is made when it is asked for, from the file id and `Storage:PublicBaseUrl`, in one place
+(`PdfFileLinks`, in the Api project: the application layer never builds a URL). It is never stored. With
+`Blocks:Files:RequireSignature` on, it carries `expires` and an HMAC-SHA256 `sig` (`FileLinkSigner`, in the
+studs, so every block signs the same way), and the endpoint refuses anything else with the same bare 404 as a
+missing file. A holder asks `GET /api/pdf/jobs/{id}/file-url` for a fresh link, and the console never holds
+one: it downloads through `GET /api/pdf/jobs/{id}/file` with its own credentials.
+
+Files do not live for ever. `FileRetentionSweeper` runs at start-up and every 15 minutes: it marks the jobs whose
+file is past `Blocks:Files:RetentionDays`, then deletes the files by their age. A read applies the same
+rule itself and also notices a file that is gone from storage, so nothing is served late and a job never
+promises a link it cannot honour.
+
 ### Two ways to get a result
 
 Bus callers get `IGeneratePdfResponse` — that is the real interface, and it needs no polling.
@@ -177,7 +189,8 @@ built-in templates stay on disk because they ship in the image.
 
 - **Jobs** keep the retention they always had: a job is readable for `JobStore:RetentionHours`
   after its **last save** (every save used to give it a fresh expiry). Reads apply the cut-off
-  themselves; an hourly sweeper only deletes what is past it.
+  themselves; an hourly sweeper only deletes what is past it. A succeeded job is kept as long as its
+  file (`file_created_at` plus `Blocks:Files:RetentionDays`), then for the same period again.
 - **Templates** keep their revision check, now done by the database: an update names the revision
   it was based on and matches only that row, so two instances cannot both win. A unique index on
   the lower-cased key keeps keys unique ignoring case, as the catalog always did.

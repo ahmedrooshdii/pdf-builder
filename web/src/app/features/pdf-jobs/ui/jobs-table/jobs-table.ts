@@ -47,8 +47,8 @@ const PAGE_SIZE = 10;
 })
 export class JobsTable {
   readonly jobs = input.required<readonly PdfJob[]>();
-  /** Turns a file id into a download URL; the table cannot know the API's address itself. */
-  readonly downloadUrlFor = input.required<(fileId: string) => string>();
+  /** Asks the page to save this job's PDF; the table neither knows the API nor fetches anything. */
+  readonly download = output<PdfJob>();
 
   readonly removed = output<readonly string[]>();
 

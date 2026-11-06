@@ -1,3 +1,4 @@
+using Blocks.ServiceDefaults.Files;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
@@ -5,6 +6,7 @@ using PdfBuilder.Domain.Exceptions;
 using PdfBuilder.Domain.Jobs;
 using PdfBuilder.Infrastructure.Jobs;
 using PdfBuilder.Infrastructure.Persistence;
+using PdfBuilder.Infrastructure.Persistence.Records;
 using PdfBuilder.TestSupport;
 
 namespace PdfBuilder.Infrastructure.Tests;
@@ -20,12 +22,14 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <summary>A store for one client, on a context of its own: what a request or a restart looks like to it.</summary>
-    private static EfPdfJobStore StoreOn(TestDatabase database, TestClock clock, int retentionHours = 24, string? clientId = "alpha")
+    private static EfPdfJobStore StoreOn(
+        TestDatabase database, TestClock clock, int retentionHours = 24, string? clientId = "alpha", int fileRetentionDays = 30)
     {
         var caller = new FixedCurrentClient(clientId);
         return new EfPdfJobStore(
             database.CreateContext(caller), new ClientScope(caller), clock,
-            Options.Create(new JobStoreOptions { RetentionHours = retentionHours }));
+            Options.Create(new JobStoreOptions { RetentionHours = retentionHours }),
+            Options.Create(new BlocksFilesOptions { RetentionDays = fileRetentionDays }));
     }
 
     [Fact]
@@ -59,7 +63,7 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
         await using var database = await postgres.CreateDatabaseAsync();
         await database.RegisterClientsAsync("alpha", "beta");
         var succeeded = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now)
-            .Succeed("a7e0495b2cd24ed9bb65b1b0f3a14c20", "http://x/files/a7e0495b2cd24ed9bb65b1b0f3a14c20", 64_210, Now.AddSeconds(4));
+            .Succeed("a7e0495b2cd24ed9bb65b1b0f3a14c20", 64_210, Now.AddSeconds(4), Now.AddSeconds(4));
 
         await StoreOn(database, new TestClock(Now)).SaveAsync(succeeded, Ct);
         var afterRestart = await StoreOn(database, new TestClock(Now)).GetAsync(succeeded.JobId, Ct);
@@ -92,7 +96,7 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
         var clock = new TestClock(Now);
 
         await StoreOn(database, clock).SaveAsync(pending, Ct);
-        await StoreOn(database, clock).SaveAsync(pending.Succeed("f1", "http://x/files/f1", 2048, Now.AddSeconds(3)), Ct);
+        await StoreOn(database, clock).SaveAsync(pending.Succeed("f1", 2048, Now.AddSeconds(3), Now.AddSeconds(3)), Ct);
 
         var job = await StoreOn(database, clock).GetAsync(pending.JobId, Ct);
         Assert.Equal(PdfJobStatus.Succeeded, job!.Status);
@@ -109,7 +113,7 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
         PostgresFixture.SkipUnlessEnabled();
         await using var database = await postgres.CreateDatabaseAsync();
         await database.RegisterClientsAsync("alpha", "beta");
-        var completed = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f1", "http://x/files/f1", 1, Now);
+        var completed = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f1", 1, Now, Now);
 
         await StoreOn(database, new TestClock(Now)).SaveAsync(completed, Ct);
 
@@ -149,7 +153,7 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
         options.Configure(database.ConnectionString).AddInterceptors(competitor);
         var caller = new FixedCurrentClient("alpha");
         var store = new EfPdfJobStore(
-            new PdfBuilderDbContext(options.Options, caller), new ClientScope(caller), clock, Options.Create(new JobStoreOptions()));
+            new PdfBuilderDbContext(options.Options, caller), new ClientScope(caller), clock, Options.Create(new JobStoreOptions()), Options.Create(new BlocksFilesOptions()));
 
         await store.SaveAsync(failed, Ct);
 
@@ -206,7 +210,7 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
 
         clock.Now = Now.AddMinutes(50);
         await StoreOn(database, clock, retentionHours: 1)
-            .SaveAsync(pending.Succeed("f1", "http://x/files/f1", 1, clock.Now), Ct);
+            .SaveAsync(pending.Succeed("f1", 1, clock.Now, clock.Now), Ct);
 
         // 110 minutes after the first save, but only 60 after the last one.
         clock.Now = Now.AddMinutes(110);
@@ -311,7 +315,7 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
         await using var database = await postgres.CreateDatabaseAsync();
         await database.RegisterClientsAsync("alpha", "beta");
         var clock = new TestClock(Now);
-        var done = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f1", "http://x/files/f1", 10, Now.AddSeconds(1));
+        var done = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f1", 10, Now.AddSeconds(1), Now.AddSeconds(1));
         await StoreOn(database, clock, clientId: "alpha").SaveAsync(done, Ct);
 
         var claimed = await StoreOn(database, clock, clientId: "alpha").ClaimAsync(done.JobId, "invoice", Ct);
@@ -372,11 +376,148 @@ public sealed class EfPdfJobStoreTests(PostgresFixture postgres)
         options.Configure(database.ConnectionString).AddInterceptors(competitor);
         var beta = new FixedCurrentClient("beta");
         var store = new EfPdfJobStore(
-            new PdfBuilderDbContext(options.Options, beta), new ClientScope(beta), clock, Options.Create(new JobStoreOptions()));
+            new PdfBuilderDbContext(options.Options, beta), new ClientScope(beta), clock, Options.Create(new JobStoreOptions()), Options.Create(new BlocksFilesOptions()));
 
         await Assert.ThrowsAsync<JobIdTakenException>(() => store.SaveAsync(contested, Ct));
 
         Assert.True(competitor.Fired);
         Assert.Equal("alpha", await OwnerOfAsync(database, contested.JobId));
+    }
+
+    // ---- Feature 005: a succeeded job lives as long as its file ----------------------------------------
+
+    /// <summary>A job that succeeded at <see cref="Now"/>, saved as <paramref name="clientId"/> at that moment.</summary>
+    private static async Task<PdfJob> SaveSucceededAsync(TestDatabase database, TestClock clock, string clientId = "alpha")
+    {
+        var saved = clock.Now;
+        clock.Now = Now;
+        var job = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Succeed("f1", 10, Now, Now);
+        await StoreOn(database, clock, clientId: clientId).SaveAsync(job, Ct);
+        clock.Now = saved;
+        return job;
+    }
+
+    [Fact]
+    public async Task A_succeeded_job_is_readable_after_the_job_retention_period_for_as_long_as_its_file_is_kept()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
+        var clock = new TestClock(Now);
+        var job = await SaveSucceededAsync(database, clock);
+
+        clock.Now = Now.AddDays(10);     // far past the 24 hours a pending job lives
+
+        var read = await StoreOn(database, clock).GetAsync(job.JobId, Ct);
+        Assert.Equal(PdfJobStatus.Succeeded, read!.Status);
+        Assert.False(read.FileExpired);
+    }
+
+    [Fact]
+    public async Task A_job_whose_file_passed_retention_says_so_for_one_job_retention_period_and_is_then_gone()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
+        var clock = new TestClock(Now);
+        var job = await SaveSucceededAsync(database, clock);
+
+        // The file is 30 days old at +30 days: from then the job reports it expired.
+        clock.Now = Now.AddDays(30).AddMinutes(1);
+        var expired = await StoreOn(database, clock).GetAsync(job.JobId, Ct);
+        Assert.True(expired!.FileExpired);
+
+        // Still there 23 hours after the file expired, gone after 24 + 30 days.
+        clock.Now = Now.AddDays(30).AddHours(23);
+        Assert.True((await StoreOn(database, clock).GetAsync(job.JobId, Ct))!.FileExpired);
+        clock.Now = Now.AddDays(30).AddHours(25);
+        Assert.Null(await StoreOn(database, clock).GetAsync(job.JobId, Ct));
+    }
+
+    [Fact]
+    public async Task A_file_marked_expired_by_the_sweeper_reads_expired_and_the_job_goes_a_job_retention_period_later()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
+        var clock = new TestClock(Now);
+        var job = await SaveSucceededAsync(database, clock);
+
+        clock.Now = Now.AddDays(2);
+        await StoreOn(database, clock).MarkFileMissingAsync(job.JobId, Ct);
+
+        Assert.True((await StoreOn(database, clock).GetAsync(job.JobId, Ct))!.FileExpired);
+        clock.Now = Now.AddDays(2).AddHours(23);
+        Assert.True((await StoreOn(database, clock).GetAsync(job.JobId, Ct))!.FileExpired);
+        clock.Now = Now.AddDays(2).AddHours(25);
+        Assert.Null(await StoreOn(database, clock).GetAsync(job.JobId, Ct));
+    }
+
+    [Fact]
+    public async Task A_failed_job_keeps_the_old_rule()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
+        var clock = new TestClock(Now);
+        var failed = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now).Fail("RENDER_FAILED", "boom", Now);
+        await StoreOn(database, clock).SaveAsync(failed, Ct);
+
+        clock.Now = Now.AddHours(23);
+        Assert.NotNull(await StoreOn(database, clock).GetAsync(failed.JobId, Ct));
+        clock.Now = Now.AddHours(25);
+        Assert.Null(await StoreOn(database, clock).GetAsync(failed.JobId, Ct));
+    }
+
+    [Fact]
+    public async Task Marking_a_file_missing_touches_only_the_callers_own_job_and_never_moves_an_existing_mark()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha", "beta");
+        var clock = new TestClock(Now);
+        var job = await SaveSucceededAsync(database, clock, "alpha");
+
+        clock.Now = Now.AddHours(1);
+        await StoreOn(database, clock, clientId: "beta").MarkFileMissingAsync(job.JobId, Ct);
+        Assert.False((await StoreOn(database, clock).GetAsync(job.JobId, Ct))!.FileExpired);
+
+        await StoreOn(database, clock).MarkFileMissingAsync(job.JobId, Ct);
+        clock.Now = Now.AddHours(5);
+        await StoreOn(database, clock).MarkFileMissingAsync(job.JobId, Ct);
+
+        await using var context = database.CreateContext("alpha");
+        var markedAt = await context.Set<PdfJobRecord>().Where(j => j.JobId == job.JobId).Select(j => j.FileExpiredAt).SingleAsync(Ct);
+        Assert.Equal(Now.AddHours(1), markedAt);
+    }
+
+    [Fact]
+    public async Task Shortening_the_retention_makes_a_read_report_the_file_expired_at_once()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
+        var clock = new TestClock(Now);
+        var job = await SaveSucceededAsync(database, clock);
+        clock.Now = Now.AddDays(4).AddHours(12);
+
+        Assert.False((await StoreOn(database, clock, fileRetentionDays: 30).GetAsync(job.JobId, Ct))!.FileExpired);
+        Assert.True((await StoreOn(database, clock, fileRetentionDays: 4).GetAsync(job.JobId, Ct))!.FileExpired);
+    }
+
+    [Fact]
+    public async Task A_job_that_never_had_a_file_cannot_be_marked()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var database = await postgres.CreateDatabaseAsync();
+        await database.RegisterClientsAsync("alpha");
+        var clock = new TestClock(Now);
+        var pending = PdfJob.Enqueued(Guid.NewGuid(), "invoice", Now);
+        await StoreOn(database, clock).SaveAsync(pending, Ct);
+
+        await StoreOn(database, clock).MarkFileMissingAsync(pending.JobId, Ct);
+
+        Assert.Equal(PdfJobStatus.Pending, (await StoreOn(database, clock).GetAsync(pending.JobId, Ct))!.Status);
+        Assert.False((await StoreOn(database, clock).GetAsync(pending.JobId, Ct))!.FileExpired);
     }
 }

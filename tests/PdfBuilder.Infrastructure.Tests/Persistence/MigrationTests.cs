@@ -122,7 +122,8 @@ public sealed class MigrationTests(PostgresFixture postgres)
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.MigrateAsync(Ct));
 
         Assert.Equal(PostgresErrorCodes.NotNullViolation, error.SqlState);
-        Assert.Single(await context.Database.GetPendingMigrationsAsync(Ct));
+        // Still pending: this one and the one after it, which is never reached.
+        Assert.Equal(2, (await context.Database.GetPendingMigrationsAsync(Ct)).Count());
     }
 
     [Fact]
@@ -159,5 +160,47 @@ public sealed class MigrationTests(PostgresFixture postgres)
 
         Assert.Equal("fk_authored_templates_clients_client_id", template.ConstraintName);
         Assert.Equal("fk_pdf_jobs_clients_client_id", job.ConstraintName);
+    }
+
+    // ---- Feature 005: files have a lifetime --------------------------------------------------------------
+
+    [Fact]
+    public async Task The_file_lifetime_migration_backfills_succeeded_jobs_and_drops_the_stored_link()
+    {
+        PostgresFixture.SkipUnlessEnabled();
+        await using var empty = await postgres.CreateEmptyDatabaseAsync();
+        await using var context = empty.CreateContext();
+        var before = context.Database.GetMigrations().Single(id => id.EndsWith("_RequireClientOwner", StringComparison.Ordinal));
+        await context.Database.GetService<IMigrator>().MigrateAsync(before, Ct);
+        await ExecuteAsync(empty, "INSERT INTO clients (id, name, created_at) VALUES ('alpha', 'alpha', now())");
+        var completedAt = new DateTimeOffset(2026, 10, 1, 8, 30, 0, TimeSpan.Zero);
+        var succeededId = Guid.NewGuid();
+        var failedId = Guid.NewGuid();
+        await ExecuteAsync(empty,
+            "INSERT INTO pdf_jobs (job_id, client_id, template_key, status, enqueued_at, completed_at, file_id, file_url, size_bytes, last_saved_at) " +
+            $"VALUES ('{succeededId}', 'alpha', 'invoice', 'Succeeded', now(), '{completedAt:O}', 'f1', 'http://x/files/f1', 10, now())");
+        await ExecuteAsync(empty,
+            "INSERT INTO pdf_jobs (job_id, client_id, template_key, status, enqueued_at, completed_at, error_code, error_message, last_saved_at) " +
+            $"VALUES ('{failedId}', 'alpha', 'invoice', 'Failed', now(), now(), 'X', 'boom', now())");
+
+        await context.Database.MigrateAsync(Ct);
+
+        Assert.Equal(completedAt.UtcDateTime, await ScalarAsync<DateTime>(empty, $"SELECT file_created_at FROM pdf_jobs WHERE job_id = '{succeededId}'"));
+        Assert.Equal(DBNull.Value, await ScalarAsync<object>(empty, $"SELECT file_created_at FROM pdf_jobs WHERE job_id = '{failedId}'"));
+        Assert.Equal(0L, await ScalarAsync<long>(empty,
+            "SELECT count(*) FROM information_schema.columns WHERE table_name = 'pdf_jobs' AND column_name = 'file_url'"));
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(empty,
+            "INSERT INTO pdf_jobs (job_id, client_id, template_key, status, enqueued_at, last_saved_at) " +
+            "VALUES (gen_random_uuid(), 'alpha', 'invoice', 'Succeeded', now(), now())"));
+        Assert.Equal("ck_pdf_jobs_file_created_at", error.ConstraintName);
+    }
+
+    private static async Task<T> ScalarAsync<T>(TestDatabase database, string sql)
+    {
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync(Ct);
+        await using var command = new NpgsqlCommand(sql, connection);
+        return (T)(await command.ExecuteScalarAsync(Ct))!;
     }
 }

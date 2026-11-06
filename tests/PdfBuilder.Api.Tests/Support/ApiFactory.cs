@@ -27,6 +27,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>The admin key every factory accepts; its hash is what the service is configured with.</summary>
     public static readonly string AdminKey = ApiKeyFormat.NewAdminKey();
 
+    /// <summary>The file-link signing key every factory is configured with; a setting passed to the factory replaces it.</summary>
+    public const string FileSigningKey = "dGVzdC1maWxlLXNpZ25pbmcta2V5LTAxMjM0NTY3ODlhYmNkZWY=";
+
     private readonly TestDatabase _database;
     private readonly string _dataRoot = Path.Combine(Path.GetTempPath(), $"pdf-builder-api-tests-{Guid.NewGuid():N}");
     private readonly Action<IServiceCollection>? _configure;
@@ -116,6 +119,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Storage:RootPath", Path.Combine(_dataRoot, "files"));
         builder.UseSetting("TemplateStore:RootPath", Path.Combine(RepositoryRoot(), "templates"));
         builder.UseSetting("TemplateStore:AuthoredRootPath", Path.Combine(_dataRoot, "templates"));
+        builder.UseSetting("Blocks:Files:SigningKey", FileSigningKey);
         foreach (var (key, value) in _settings)
             builder.UseSetting(key, value);
 

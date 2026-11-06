@@ -126,16 +126,20 @@
             <td appTableCell class="pr-3">
               <div class="flex justify-end gap-0.5">
                 @if (job.status === 'Succeeded' && job.fileId) {
-                  <a
-                    appButton
-                    variant="ghost"
-                    size="icon-sm"
-                    [href]="downloadUrlFor()(job.fileId)"
-                    [attr.download]="job.templateKey + '-' + job.jobId + '.pdf'"
-                    [attr.aria-label]="'Download PDF of job ' + job.jobId"
-                  >
-                    <app-icon name="download" />
-                  </a>
+                  @if (job.fileExpired) {
+                    <span class="self-center px-2 text-xs text-muted-foreground">Expired</span>
+                  } @else {
+                    <button
+                      appButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      (click)="download.emit(job)"
+                      [attr.aria-label]="'Download PDF of job ' + job.jobId"
+                    >
+                      <app-icon name="download" />
+                    </button>
+                  }
                 }
                 <a
                   appButton

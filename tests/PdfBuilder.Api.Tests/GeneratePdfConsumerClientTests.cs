@@ -1,3 +1,4 @@
+using PdfBuilder.Api.Tests.Support;
 using Blocks.ServiceDefaults;
 using Blocks.ServiceDefaults.EntityFramework;
 using Blocks.ServiceDefaults.Identity;
@@ -45,7 +46,7 @@ public sealed class GeneratePdfConsumerClientTests(PostgresFixture postgres)
     /// A deployment with clients <c>alpha</c>, <c>beta</c> and a disabled <c>gamma</c>, whose default client is
     /// <paramref name="defaultClientId"/>, and a renderer that succeeds unless <paramref name="renderFails"/>.
     /// </summary>
-    private async Task<Rig> StartAsync(string? defaultClientId, bool renderFails = false)
+    private async Task<Rig> StartAsync(string? defaultClientId, bool renderFails = false, bool requireSignature = false)
     {
         PostgresFixture.SkipUnlessEnabled();
         var database = await postgres.CreateDatabaseAsync();
@@ -57,7 +58,7 @@ public sealed class GeneratePdfConsumerClientTests(PostgresFixture postgres)
             sender.Send(Arg.Any<GeneratePdfCommand>(), Arg.Any<CancellationToken>()).ThrowsAsync(new TemplateNotFoundException("invoice"));
         else
             sender.Send(Arg.Any<GeneratePdfCommand>(), Arg.Any<CancellationToken>())
-                .Returns(new GeneratePdfResult("a7e0495b2cd24ed9bb65b1b0f3a14c20", "http://x/files/a7e0495b2cd24ed9bb65b1b0f3a14c20", 2048));
+                .Returns(new GeneratePdfResult("a7e0495b2cd24ed9bb65b1b0f3a14c20", 2048, DateTimeOffset.UnixEpoch));
 
         var logs = new CapturingLoggerProvider();
         var services = new ServiceCollection();
@@ -65,6 +66,7 @@ public sealed class GeneratePdfConsumerClientTests(PostgresFixture postgres)
         services.AddSingleton(sender);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(Options.Create(new JobStoreOptions()));
+        services.AddFileLinks(requireSignature);
         services.AddSingleton(Options.Create(new BlocksBusOptions { DefaultClientId = defaultClientId }));
         services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(database.ConnectionString));
         services.AddScoped<IPdfJobStore, EfPdfJobStore>();
@@ -155,6 +157,47 @@ public sealed class GeneratePdfConsumerClientTests(PostgresFixture postgres)
         Assert.Null(await ReadAsAsync(rig, "alpha", jobId));
     }
 
+
+    // ---- Feature 005: the reply's link --------------------------------------------------------------------
+
+    [Fact]
+    public async Task With_signing_required_the_reply_carries_a_signed_link_and_when_it_expires()
+    {
+        await using var rig = await StartAsync(defaultClientId: "alpha", requireSignature: true);
+
+        var response = await SendAsync(rig, "alpha");
+
+        Assert.True(response.IsSuccess);
+        var link = new Uri(response.FileUrl!);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(link.Query);
+        Assert.Equal("/files/a7e0495b2cd24ed9bb65b1b0f3a14c20", link.AbsolutePath);
+        Assert.True(query.ContainsKey("sig"));
+        Assert.NotNull(response.FileUrlExpiresAt);
+        Assert.Equal(response.FileUrlExpiresAt!.Value.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), query["expires"]);
+    }
+
+    [Fact]
+    public async Task With_signing_off_the_reply_carries_the_plain_link_and_no_expiry()
+    {
+        await using var rig = await StartAsync(defaultClientId: "alpha", requireSignature: false);
+
+        var response = await SendAsync(rig, "alpha");
+
+        Assert.Equal("http://x.test/files/a7e0495b2cd24ed9bb65b1b0f3a14c20", response.FileUrl);
+        Assert.Null(response.FileUrlExpiresAt);
+    }
+
+    [Fact]
+    public async Task A_failure_reply_has_no_link_and_no_expiry()
+    {
+        await using var rig = await StartAsync(defaultClientId: "alpha", renderFails: true, requireSignature: true);
+
+        var response = await SendAsync(rig, "alpha");
+
+        Assert.False(response.IsSuccess);
+        Assert.Null(response.FileUrl);
+        Assert.Null(response.FileUrlExpiresAt);
+    }
     [Fact]
     public async Task A_message_naming_no_client_is_handled_for_the_default_client()
     {

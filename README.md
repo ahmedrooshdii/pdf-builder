@@ -9,18 +9,22 @@ POST /api/pdf/jobs   X-Api-Key: pdf_k7f2a9c1_…   { "templateKey": "invoice", "
   -> 202 Accepted    { "jobId": "0865…-08df249c54be", "statusUrl": "/api/pdf/jobs/…" }
 
 GET  /api/pdf/jobs/{jobId}
-  -> 200             { "status": "Succeeded", "fileUrl": "http://…/files/a7e0495b…" }
+  -> 200             { "status": "Succeeded", "fileUrl": "http://…/files/a7e0495b…?expires=…&sig=…" }
+
+GET  /api/pdf/jobs/{jobId}/file-url
+  -> 200             { "fileUrl": "http://…", "fileUrlExpiresAt": "2026-11-05T13:00:00Z" }
 
 GET  /files/{fileId}
   -> 200 application/pdf
 ```
 
-> **Use the `fileUrl` from step 2 as-is rather than building it yourself.** A `jobId` is a dashed
+> **Use the `fileUrl` from step 2 as-is rather than building it yourself.** With signing on it expires (an hour
+> by default): ask `file-url` for a fresh one rather than keeping it, and a file is deleted after 30 days. A `jobId` is a dashed
 > GUID and a `fileId` is 32 hex characters with no dashes; putting the first into `/files/` is the
 > most common way to get a confusing 404.
 
 Every `/api` call carries an API key in `X-Api-Key`, issued by the operator to each product (a
-**client**) with only the permissions it needs; `/health/*` and the file download need none. See
+**client**) with only the permissions it needs; `/health/*` needs none, and a file link is its own credential. See
 [API keys](#api-keys) below.
 
 Services that speak the message bus skip the polling: publish `IGeneratePdfRequest` and receive
@@ -93,6 +97,13 @@ once, so keep it:
 ```bash
 dotnet run --project tools/Blocks.Cli -- admin-key
 dotnet user-secrets --project src/PdfBuilder.Api set "Blocks:Admin:KeyHash" "<printed hash>"
+```
+
+The service will not start without a signing key for file links either: the links to generated PDFs are signed
+with it once signing is switched on ([configuration.md](docs/configuration.md#files)). It is a secret, so it goes in user-secrets too:
+
+```bash
+dotnet user-secrets --project src/PdfBuilder.Api set "Blocks:Files:SigningKey" "$(dotnet run --project tools/Blocks.Cli -- file-signing-key | head -n 1)"
 ```
 
 > **Running in Development loads your user-secrets**, which may point at a real broker, and a local

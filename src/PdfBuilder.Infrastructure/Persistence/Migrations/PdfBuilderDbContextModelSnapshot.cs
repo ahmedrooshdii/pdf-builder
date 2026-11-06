@@ -473,13 +473,17 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("error_message");
 
+                    b.Property<DateTimeOffset?>("FileCreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("file_created_at");
+
+                    b.Property<DateTimeOffset?>("FileExpiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("file_expired_at");
+
                     b.Property<string>("FileId")
                         .HasColumnType("text")
                         .HasColumnName("file_id");
-
-                    b.Property<string>("FileUrl")
-                        .HasColumnType("text")
-                        .HasColumnName("file_url");
 
                     b.Property<DateTimeOffset>("LastSavedAt")
                         .HasColumnType("timestamp with time zone")
@@ -506,11 +510,16 @@ namespace PdfBuilder.Infrastructure.Persistence.Migrations
                     b.HasIndex("ClientId")
                         .HasDatabaseName("ix_pdf_jobs_client_id");
 
+                    b.HasIndex("FileCreatedAt")
+                        .HasDatabaseName("ix_pdf_jobs_file_created_at");
+
                     b.HasIndex("LastSavedAt")
                         .HasDatabaseName("ix_pdf_jobs_last_saved_at");
 
                     b.ToTable("pdf_jobs", null, t =>
                         {
+                            t.HasCheckConstraint("ck_pdf_jobs_file_created_at", "status <> 'Succeeded' OR file_created_at IS NOT NULL");
+
                             t.HasCheckConstraint("ck_pdf_jobs_status", "status IN ('Pending', 'Succeeded', 'Failed')");
                         });
                 });

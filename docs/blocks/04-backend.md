@@ -271,8 +271,18 @@ https://pdf.example.com/files/a7e0495b…?expires=1793614800&sig=3q2-7wE…
   caller owns.
 - The console does not use signed URLs: it downloads through `GET /api/pdf/jobs/{id}/file`, which
   is authenticated like any other endpoint.
+- `Blocks:Files:RequireSignature` (default `false` in the first release that has it, `true` in the next)
+  decides which links are *issued* as well as which are accepted. Off: the plain `/files/{fileId}`, no
+  expiry, as before; on: every link is signed, and unsigned links get the same 404. A signed link is
+  always accepted until it expires, so the switch can be turned on and off again safely.
+- Links are made when asked for, from the file id and `Storage:PublicBaseUrl`; none is stored (the
+  `file_url` column is gone). `fileUrlExpiresAt` is null while signing is off.
 - Files are deleted `Blocks:Files:RetentionDays` (default 30) after creation by a background
-  sweeper. The job keeps its record and reports `fileExpired: true`.
+  sweeper that runs at start-up and every 15 minutes, so a file is gone within about an hour of its
+  deadline at the latest. A succeeded job is kept as long as its file, then for `JobStore:RetentionHours`
+  more, reporting `fileExpired: true`. A file found missing from storage is reported the same way.
+- Signatures never reach a log: `Microsoft.AspNetCore.Hosting.Diagnostics` is pinned to `Warning`, and
+  responses carry `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex`.
 - Storage stays behind `IFileStorage`: local disk now, object storage when a second replica exists.
 
 ### Rate limiting
@@ -291,6 +301,8 @@ ASP.NET Core rate limiter, partitioned by `client_id`:
   today. Never authenticated.
 - OpenTelemetry traces and metrics; every log scope carries `ClientId` and, where there is one,
   `JobId`. Metrics are tagged with `client_id`, so per-product usage is visible from day one.
+- Once an exporter exists, redact the URL query from every span, metric tag and log it writes: a signed file
+  link carries its signature there (`sig`), and a recorded one is usable until it expires.
 
 ### Configuration
 
@@ -418,7 +430,7 @@ it does not wait on the multi-client work:
 | Type | Member | Notes |
 | --- | --- | --- |
 | `IGeneratePdfRequest` | `string? ClientId` | See above. |
-| `IGeneratePdfResponse` | `DateTimeOffset? FileUrlExpiresAt` | **Feature 005, not 003.** Null while signing is off. Not added in 1.2.0, which carries `ClientId` and the `CLIENT_DISABLED` code. |
+| `IGeneratePdfResponse` | `DateTimeOffset? FileUrlExpiresAt` | **Feature 005, shipping as 1.3.0**, not 1.2.0, which carries `ClientId` and the `CLIENT_DISABLED` code. Null while signing is off. |
 
 `IGeneratePdfResponse.FileUrl` is currently documented as "not signed and does not expire". Turning
 signing on changes that behaviour for existing bus consumers, so it ships behind
@@ -432,9 +444,9 @@ next), with the switch announced in `CHANGELOG.md`.
 | POST | `/api/pdf/jobs` | `pdf:generate` | + `Idempotency-Key`, client-scoped, outbox |
 | GET | `/api/pdf/jobs` | `pdf:generate` | **New.** `?status&templateKey&from&to&limit&cursor` |
 | GET | `/api/pdf/jobs/{id}` | `pdf:generate` | Client-scoped; + `fileExpired` |
-| GET | `/api/pdf/jobs/{id}/file-url` | `pdf:generate` | **New.** Fresh signed URL |
-| GET | `/api/pdf/jobs/{id}/file` | `pdf:generate` | **New.** Authenticated download, for the console |
-| GET | `/files/{fileId}` | signature | Requires `expires` and `sig` once signing is on |
+| GET | `/api/pdf/jobs/{id}/file-url` | `pdf:generate` | **New (005).** Fresh link: `404`, `409 JOB_HAS_NO_FILE`, `410 FILE_EXPIRED` |
+| GET | `/api/pdf/jobs/{id}/file` | `pdf:generate` | **New (005).** Authenticated download, for the console; same refusals |
+| GET | `/files/{fileId}` | the link | Requires a valid `expires` and `sig` once signing is on; every refusal is a bare 404 |
 | GET, POST, PUT, DELETE | `/api/templates/…` | `pdf:templates:read` / `write` | Client-scoped; otherwise unchanged |
 | GET, POST, PATCH | `/api/admin/clients[/{id}]` | `admin` | **New** (stud) |
 | GET, POST, DELETE | `/api/admin/clients/{id}/keys[/{keyId}]` | `admin` | **New** (stud). DELETE revokes. |

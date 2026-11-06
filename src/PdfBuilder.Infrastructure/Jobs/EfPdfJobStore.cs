@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using PdfBuilder.Application.Abstractions;
+using Blocks.ServiceDefaults.Files;
 using PdfBuilder.Domain.Exceptions;
 using PdfBuilder.Domain.Jobs;
 using PdfBuilder.Infrastructure.Persistence;
@@ -33,7 +34,8 @@ public sealed class EfPdfJobStore(
     PdfBuilderDbContext db,
     ClientScope scope,
     TimeProvider clock,
-    IOptions<JobStoreOptions> options) : IPdfJobStore
+    IOptions<JobStoreOptions> options,
+    IOptions<BlocksFilesOptions> fileOptions) : IPdfJobStore
 {
     public async Task SaveAsync(PdfJob job, CancellationToken cancellationToken = default)
     {
@@ -99,13 +101,36 @@ public sealed class EfPdfJobStore(
 
     public async Task<PdfJob?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
-        var cutoff = clock.GetUtcNow() - TimeSpan.FromHours(options.Value.RetentionHours);
+        var now = clock.GetUtcNow();
+        var readable = JobVisibility.IsReadable(now, options.Value.RetentionHours, fileOptions.Value.RetentionDays);
 
         var record = await db.Set<PdfJobRecord>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(j => j.JobId == jobId && j.LastSavedAt >= cutoff, cancellationToken);
+            .Where(j => j.JobId == jobId)
+            .Where(readable)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        return record?.ToDomain();
+        return record is null ? null : WithRetention(record.ToDomain(), now);
+    }
+
+    public async Task MarkFileMissingAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        var now = clock.GetUtcNow();
+
+        // Through the context's client filter: only the caller's own job. A mark never moves once set.
+        await db.Set<PdfJobRecord>()
+            .Where(j => j.JobId == jobId && j.Status == nameof(PdfJobStatus.Succeeded) && j.FileExpiredAt == null)
+            .ExecuteUpdateAsync(set => set.SetProperty(j => j.FileExpiredAt, now), cancellationToken);
+    }
+
+    /// <summary>A file is expired once it was marked so, or once it is older than the retention period.</summary>
+    private PdfJob WithRetention(PdfJob job, DateTimeOffset now)
+    {
+        if (job.Status != PdfJobStatus.Succeeded || job.FileExpired)
+            return job;
+
+        var expired = job.FileCreatedAt < now - TimeSpan.FromDays(fileOptions.Value.RetentionDays);
+        return expired ? job.WithFileExpired() : job;
     }
 
     private static bool IsDuplicateKey(DbUpdateException exception) =>

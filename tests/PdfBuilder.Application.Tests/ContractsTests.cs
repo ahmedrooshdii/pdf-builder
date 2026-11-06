@@ -89,4 +89,34 @@ public sealed class ContractsTests
         request.ClientId = "erp";
         Assert.Equal("erp", ((IGeneratePdfRequest)request).ClientId);
     }
+
+    private sealed record Reply(
+        Guid CorrelationId, bool IsSuccess, string? FileId, string? FileUrl, DateTimeOffset? FileUrlExpiresAt,
+        long? SizeBytes, string? ErrorCode, string? ErrorMessage, DateTimeOffset CompletedAt) : IGeneratePdfResponse;
+
+    [Fact]
+    public void A_reply_round_trips_the_expiry_of_its_link()
+    {
+        var expires = new DateTimeOffset(2026, 11, 5, 13, 0, 0, TimeSpan.Zero);
+        var reply = new Reply(Guid.NewGuid(), true, "f1", "http://x/files/f1?expires=1&sig=s", expires, 1, null, null, expires);
+
+        var json = System.Text.Json.JsonSerializer.Serialize<IGeneratePdfResponse>(reply);
+        var back = System.Text.Json.JsonSerializer.Deserialize<Reply>(json)!;
+
+        Assert.Equal(expires, back.FileUrlExpiresAt);
+    }
+
+    [Fact]
+    public void A_reply_from_a_service_that_predates_the_expiry_still_reads_with_none()
+    {
+        // What a 1.2.0 service puts on the wire: no FileUrlExpiresAt at all.
+        const string older =
+            """{"CorrelationId":"6f9619ff-8b86-d011-b42d-00c04fc964ff","IsSuccess":true,"FileId":"f1","FileUrl":"http://x/files/f1","SizeBytes":1,"ErrorCode":null,"ErrorMessage":null,"CompletedAt":"2026-11-05T12:00:00+00:00"}""";
+
+        var reply = System.Text.Json.JsonSerializer.Deserialize<Reply>(older)!;
+
+        Assert.True(reply.IsSuccess);
+        Assert.Equal("http://x/files/f1", reply.FileUrl);
+        Assert.Null(reply.FileUrlExpiresAt);
+    }
 }

@@ -33,7 +33,7 @@ public sealed partial class GeneratePdfCommandHandler(
         var elapsedMs = (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
         LogGenerated(logger, stored.FileId, request.TemplateKey, stored.SizeBytes, elapsedMs);
 
-        return new GeneratePdfResult(stored.FileId, stored.Url, stored.SizeBytes);
+        return new GeneratePdfResult(stored.FileId, stored.SizeBytes, stored.CreatedAt);
     }
 
     [LoggerMessage(

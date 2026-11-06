@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using PdfBuilder.Infrastructure.Templates;
 
 namespace PdfBuilder.Infrastructure.Persistence;
@@ -40,6 +41,13 @@ internal sealed class DatabaseStartup(
 
         if (options.Value.MigrateOnStartup)
         {
+            // One instance upgrades at a time. EF's own lock covers a single migrate call, but the upgrade
+            // below is several steps, and an instance that decided what to do before another finished would
+            // migrate *back* to AddClientOwner and undo it. Decide only once the lock is held.
+            await using var upgradeLock = await UpgradeLock.AcquireAsync(database.GetConnectionString()!, cancellationToken);
+            pending = (await database.GetPendingMigrationsAsync(cancellationToken)).ToList();
+            names = string.Join(", ", pending);
+
             if (pending.Any(id => id.EndsWith(RequireClientOwner, StringComparison.Ordinal)))
             {
                 // Templates and jobs from before clients existed get an owner between the two migrations,
@@ -83,4 +91,36 @@ internal sealed class DatabaseStartup(
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+/// <summary>A PostgreSQL advisory lock held for the length of a start-up upgrade, on a connection of its own.</summary>
+internal sealed class UpgradeLock : IAsyncDisposable
+{
+    /// <summary>Any constant, as long as nothing else locks on it; EF Core's migration lock uses another.</summary>
+    private const long Key = 0x5044_4642_5550_4752;     // "PDFBUPGR"
+
+    private readonly NpgsqlConnection _connection;
+
+    private UpgradeLock(NpgsqlConnection connection) => _connection = connection;
+
+    public static async Task<UpgradeLock> AcquireAsync(string connectionString, CancellationToken cancellationToken)
+    {
+        var connection = new NpgsqlConnection(connectionString);
+        try
+        {
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new NpgsqlCommand("SELECT pg_advisory_lock(@key)", connection);
+            command.Parameters.AddWithValue("key", Key);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return new UpgradeLock(connection);
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
+    }
+
+    /// <summary>Closing the connection releases the lock, even if this process dies first.</summary>
+    public ValueTask DisposeAsync() => _connection.DisposeAsync();
 }

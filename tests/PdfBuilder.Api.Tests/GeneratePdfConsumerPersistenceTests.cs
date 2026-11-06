@@ -1,3 +1,4 @@
+using PdfBuilder.Api.Tests.Support;
 using Blocks.ServiceDefaults;
 using Blocks.ServiceDefaults.EntityFramework;
 using Blocks.ServiceDefaults.Identity;
@@ -41,6 +42,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
         services.AddSingleton(Options.Create(new JobStoreOptions()));
+        services.AddFileLinks();
         services.AddDbContext<PdfBuilderDbContext>(options => options.Configure(connectionString));
         services.AddScoped<IPdfJobStore, EfPdfJobStore>();
 
@@ -95,7 +97,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
         await database.RegisterClientsAsync("alpha");
         var sender = Substitute.For<ISender>();
         sender.Send(Arg.Any<GeneratePdfCommand>(), Arg.Any<CancellationToken>())
-            .Returns(new GeneratePdfResult("a7e0495b2cd24ed9bb65b1b0f3a14c20", "http://x/files/a7e0495b2cd24ed9bb65b1b0f3a14c20", 2048));
+            .Returns(new GeneratePdfResult("a7e0495b2cd24ed9bb65b1b0f3a14c20", 2048, DateTimeOffset.UnixEpoch));
         await using var provider = BuildProvider(database.ConnectionString, sender);
         var jobId = NewId.NextGuid();
         await SaveAsync(provider, PdfJob.Enqueued(jobId, "invoice", DateTimeOffset.UtcNow));
@@ -137,7 +139,7 @@ public sealed class GeneratePdfConsumerPersistenceTests(PostgresFixture postgres
         await database.RegisterClientsAsync("alpha");
         var sender = Substitute.For<ISender>();
         sender.Send(Arg.Any<GeneratePdfCommand>(), Arg.Any<CancellationToken>())
-            .Returns(new GeneratePdfResult("f1", "http://x/files/f1", 1));
+            .Returns(new GeneratePdfResult("f1", 1, DateTimeOffset.UnixEpoch));
         await using var provider = BuildProvider(database.ConnectionString, sender);
         var jobId = NewId.NextGuid();
 

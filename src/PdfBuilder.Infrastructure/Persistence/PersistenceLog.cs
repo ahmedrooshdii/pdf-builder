@@ -58,4 +58,16 @@ internal static partial class PersistenceLog
         Level = LogLevel.Information,
         Message = "Gave {TemplateCount} authored template(s) and {JobCount} job(s) from before clients existed to client {ClientId}")]
     public static partial void ClientOwnerAssigned(ILogger logger, int templateCount, int jobCount, string clientId);
+
+    [LoggerMessage(
+        EventId = 3040,
+        Level = LogLevel.Debug,
+        Message = "File sweep marked {Marked} job(s) and deleted {Deleted} file(s) older than {RetentionDays} day(s)")]
+    public static partial void FilesSwept(ILogger logger, int marked, int deleted, int retentionDays);
+
+    [LoggerMessage(
+        EventId = 3041,
+        Level = LogLevel.Warning,
+        Message = "File sweep failed; it will try again in 15 minutes")]
+    public static partial void FileSweepFailed(ILogger logger, Exception exception);
 }

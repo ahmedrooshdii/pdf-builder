@@ -32,6 +32,8 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
             TemplateReadOnlyException e => Problem(StatusCodes.Status409Conflict, "Template is read-only", e),
             StaleTemplateRevisionException e => Problem(StatusCodes.Status409Conflict, "Template changed", e),
             TemplateRenderException e => Problem(StatusCodes.Status422UnprocessableEntity, "Template does not render", e),
+            JobHasNoFileException e => Problem(StatusCodes.Status409Conflict, "Job has no file", e),
+            FileExpiredException e => Problem(StatusCodes.Status410Gone, "File expired", e),
             _ when StorageFailures.IsUnavailable(exception) => StorageUnavailable(),
             _ => null
         };

@@ -23,4 +23,10 @@ public interface IPdfJobStore
 
     /// <returns>The job, or <c>null</c> when it is unknown or its retention window has passed.</returns>
     Task<PdfJob?> GetAsync(Guid jobId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records that the caller's own job's file is gone from storage, so later reads report it expired.
+    /// Does nothing for an unknown job, another client's job, or one already marked.
+    /// </summary>
+    Task MarkFileMissingAsync(Guid jobId, CancellationToken cancellationToken = default);
 }

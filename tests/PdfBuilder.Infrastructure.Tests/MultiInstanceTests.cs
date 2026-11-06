@@ -84,7 +84,7 @@ public sealed class MultiInstanceTests(PostgresFixture postgres) : IDisposable
         // B's worker finishes it; A, polled next, reports the result.
         await using (var scope = ActingScope(instanceB))
             await scope.ServiceProvider.GetRequiredService<IPdfJobStore>()
-                .SaveAsync(PdfJob.Enqueued(jobId, "invoice", Now).Succeed("f1", "http://b.test/files/f1", 2048, Now.AddSeconds(2)), Ct);
+                .SaveAsync(PdfJob.Enqueued(jobId, "invoice", Now).Succeed("f1", 2048, Now.AddSeconds(2), Now.AddSeconds(2)), Ct);
 
         await using (var scope = ActingScope(instanceA))
         {

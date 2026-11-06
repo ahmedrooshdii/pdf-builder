@@ -68,6 +68,17 @@ services:
       # Empty is fine on a fresh install. An existing deployment that has templates or jobs must set it before
       # upgrading or the service refuses to start: docs/operations.md, "Upgrading to per-client templates and jobs".
       Blocks__Bus__DefaultClientId: ${DEFAULT_CLIENT_ID:-}
+      # The key that signs file links, from `dotnet run --project tools/Blocks.Cli -- file-signing-key`.
+      # Required: the service does not start without it. Changing it ends every link handed out so far.
+      Blocks__Files__SigningKey: ${FILES_SIGNING_KEY:?set FILES_SIGNING_KEY in .env}
+      # true: links are signed and stop working after UrlLifetime, and unsigned links are refused. The next
+      # release makes this the default. Switch it on once every product has stopped storing links.
+      # Blocks__Files__RequireSignature: "true"
+      # How long a link works (00:01:00 to 7.00:00:00; default one hour).
+      # Blocks__Files__UrlLifetime: "01:00:00"
+      # How many days a PDF is kept, from when it was made (1 to 3650; default 30). Older files are deleted,
+      # the first time at the first start of this version.
+      # Blocks__Files__RetentionDays: "30"
 
       Storage__RootPath: /data/files
       TemplateStore__RootPath: /app/Templates

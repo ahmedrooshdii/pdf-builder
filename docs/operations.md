@@ -39,6 +39,10 @@ and nothing fails until a caller tries to download.
 `Blocks__Admin__KeyHash` is the hash of the operator's admin key. Without it the service does not
 start, and says so. See [configuration.md](configuration.md#admin-key) and [API keys](#api-keys).
 
+`Blocks__Files__SigningKey` signs the links to generated PDFs. Without it the service does not start, and
+says so, before it touches the database. See [configuration.md](configuration.md#files) and
+[Upgrading to private files](#upgrading-to-private-files).
+
 ### First start and upgrades
 
 On start the service applies any pending schema migrations (`Blocks:Database:MigrateOnStartup`), so
@@ -129,6 +133,59 @@ because the owner is required only after every row has one:
 3. Apply the migration `RequireClientOwner`. It makes the owner required, ties it to `clients`, and makes a
    template key unique per client. If a row still has no owner, it fails and changes nothing.
 
+### Upgrading to private files
+
+From this version a link to a generated PDF can be made to expire, a product can ask for a fresh one, and PDFs
+are deleted after a retention period. One setting is required and nothing else has to be done.
+
+1. Set `Blocks:Files:SigningKey` (environment variable `Blocks__Files__SigningKey`) to a secret from
+   `dotnet run --project tools/Blocks.Cli -- file-signing-key` or `openssl rand -base64 32`
+   ([configuration.md](configuration.md#files)). Without it the service does not start and says what to fill in;
+   it stops before the database, so nothing has been changed.
+2. Take a backup, then upgrade. The migration `AddFileLifetime` records when each job's file was made (from
+   when the job completed) and drops the stored link: links are made when asked for, from the file's id and
+   `Storage:PublicBaseUrl`.
+
+- **Links behave as before until you say otherwise.** `Blocks:Files:RequireSignature` is `false`: a link is
+  the plain `/files/{fileId}` and never expires, and `fileUrlExpiresAt` is empty. Turn it on when the products
+  that call this service ask for a fresh link (`GET /api/pdf/jobs/{id}/file-url`) instead of keeping one:
+  from then on every link is signed and stops working after `Blocks:Files:UrlLifetime` (an hour by default),
+  and an unsigned link answers `404`. Turn it off again and a signed link that was handed out still works
+  until it expires. **The next release turns it on by default.**
+- **Retention is not optional, and it starts at once.** Files are deleted `Blocks:Files:RetentionDays` (30)
+  after they were made, whichever way the switch is set. The first start of this version deletes every file
+  older than that, within the first sweep, which runs at start-up and then every 15 minutes. To keep everything
+  for now, set `Blocks:Files:RetentionDays` to `3650` **before** upgrading.
+- **A succeeded job is kept as long as its file**, then for `JobStore:RetentionHours` more, so a product that
+  polls an old job is told `fileExpired: true` rather than that the job does not exist.
+- **If you apply migrations yourself** (`Blocks:Database:MigrateOnStartup` is `false`), apply `AddFileLifetime`
+  (`dotnet ef migrations script RequireClientOwner AddFileLifetime --idempotent --project
+  src/PdfBuilder.Infrastructure --startup-project src/PdfBuilder.Api`). In substance:
+
+  ```sql
+  ALTER TABLE pdf_jobs ADD file_created_at timestamptz NULL;
+  ALTER TABLE pdf_jobs ADD file_expired_at timestamptz NULL;
+  UPDATE pdf_jobs SET file_created_at = completed_at WHERE status = 'Succeeded';
+  ALTER TABLE pdf_jobs ADD CONSTRAINT ck_pdf_jobs_file_created_at
+      CHECK (status <> 'Succeeded' OR file_created_at IS NOT NULL);
+  CREATE INDEX ix_pdf_jobs_file_created_at ON pdf_jobs (file_created_at);
+  ALTER TABLE pdf_jobs DROP COLUMN file_url;
+  ```
+
+#### Rotating the file signing key
+
+Change `Blocks:Files:SigningKey` and restart. Every link handed out so far stops working at once (a product that
+holds one asks for a fresh one), and files and jobs are untouched. Do it when the key may have leaked, or to revoke
+every outstanding link. Several instances must all have the new key: until they do, a link made by one is refused
+by another.
+
+#### Access logs
+
+A signed link carries its signature in the query string. This service does not log request URLs (the
+`Microsoft.AspNetCore.Hosting.Diagnostics` category is pinned to `Warning`), but **a reverse proxy's access log
+does**: configure it to drop the query string, or at least `sig`, or anyone who reads the log holds working
+links until they expire. The same goes for any tracing exporter added later.
+
 ## API keys
 
 Each product is a **client** and holds one or more **keys**; the operator holds the **admin key**.
@@ -215,6 +272,9 @@ pressure rather than throughput, and horizontal scaling is the better answer.
 The consumer's prefetch is tied to the same number, so excess work stays visible in RabbitMQ instead
 of piling up in process memory where no dashboard can see it and a restart loses it.
 
+Disk use is bounded by retention: PDFs are deleted `Blocks:Files:RetentionDays` (30) after they were made, so
+the volume holds about that many days of output. Budget for your busiest 30 days, or shorten the setting.
+
 Shutdown waits up to 60 seconds for in-flight renders. Give the orchestrator at least that in its
 termination grace period, or rolling deployments will cut jobs off mid-render.
 
@@ -263,14 +323,14 @@ shared, run one instance and scale vertically, or pin downloads to the instance 
 
 ## Known gaps
 
-**Stored PDFs are never deleted.** Disk grows without bound. Until retention exists, either mount a
-volume you watch, or run a cron job over `Storage:RootPath` by file age. A real fix belongs behind
-`IFileStorage` — an object-store lifecycle rule is the cheapest version.
+**Files live on one disk.** Retention bounds how much it holds, but a download load-balanced to an instance
+other than the one that rendered the file still answers `404`. Before running several instances, replace
+`LocalFileStorage` with an object store behind `IFileStorage`; its lifecycle rule can then do the deleting.
 
-**Downloads are unauthenticated**, unlike every `/api` call. Anyone holding a `fileId` can fetch the PDF. The id is a
-random GUID, so it is not guessable, but it is a bearer token in a URL: it will end up in
-proxy logs, browser history and email. If documents are sensitive, put authentication in front of
-`GET /files/{fileId}` or switch to time-limited signed URLs.
+**A link is a bearer token while it lives.** With signing on, anyone holding a link can fetch the PDF until it
+expires (an hour by default), and it will end up in proxy logs, browser history and email: see [Access
+logs](#access-logs). With signing off, a link works until the file is deleted. Turn signing on, and shorten
+`Blocks:Files:UrlLifetime` if documents are sensitive.
 
 **No metrics or traces.** Render duration, queue depth and browser recycle rate are the first three
 numbers worth having. OpenTelemetry would slot in at `Program.cs` — MassTransit and ASP.NET Core

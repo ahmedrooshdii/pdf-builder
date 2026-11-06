@@ -167,7 +167,9 @@ Where each deployment gets it:
 | Oracle VM | `ADMIN_KEY_HASH` in `/opt/pdf-builder/.env`; `deploy/compose.prod.yaml` requires it |
 | Hugging Face Space | Secret `Blocks__Admin__KeyHash` |
 
-Health checks (`/health/live`, `/health/ready`) and file downloads (`/files/{fileId}`) need no key.
+Health checks (`/health/live`, `/health/ready`) need no key. File downloads (`/files/{fileId}`) need none either:
+the link is the credential, and with [`Blocks:Files:RequireSignature`](#files) on it carries a signature and
+stops working when it expires.
 Issuing keys, permissions and refusals: [operations.md](operations.md#api-keys).
 
 ## Console sign-in
@@ -192,6 +194,25 @@ because the console's nginx reaches the API over the Compose network. Replacing 
 ends every console session at its next request. Serving requirements (HTTPS, one site):
 [operations.md](operations.md#console-sign-in).
 
+## Files
+
+Links to generated PDFs, and how long the PDFs are kept. The same settings in every block that serves files.
+
+```json
+"Blocks": { "Files": { "UrlLifetime": "01:00:00", "RetentionDays": 30, "RequireSignature": false } }
+```
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `Blocks:Files:SigningKey` | none, **required** | Base64 of at least 32 random bytes. A **secret**: set it in user-secrets or an environment variable, never in a committed file. The service refuses to start without it, naming the setting. Generate one with `dotnet run --project tools/Blocks.Cli -- file-signing-key` or `openssl rand -base64 32`. Changing it ends every link handed out so far, which is how you rotate or revoke them all. |
+| `Blocks:Files:UrlLifetime` | `01:00:00` | `00:01:00` to `7.00:00:00`. How long a link made now works. Applies to links made after the change. |
+| `Blocks:Files:RetentionDays` | `30` | 1 to 3650. A PDF is deleted this many days after it was made, **whichever way `RequireSignature` is set**. Shortening it deletes older files at the next sweep, which runs every 15 minutes. |
+| `Blocks:Files:RequireSignature` | `false` | `true`: every link is signed and stops working at its expiry, and unsigned links are refused. `false`: links are the plain `/files/{fileId}` and never expire, as before; a signed link that was handed out still works until it expires. A product that keeps a link past its expiry must ask `GET /api/pdf/jobs/{id}/file-url` for a fresh one. **The next release changes the default to `true`.** |
+
+Environment variables: `Blocks__Files__SigningKey`, `Blocks__Files__UrlLifetime`, `Blocks__Files__RetentionDays`,
+`Blocks__Files__RequireSignature`. A refused link, whatever was wrong with it, is the same bare `404` as a file that
+does not exist.
+
 ## Storage
 
 ```json
@@ -201,7 +222,7 @@ ends every console session at its next request. Serving requirements (HTTPS, one
 | Key | Default | Notes |
 | --- | --- | --- |
 | `RootPath` | `data/files` | Where PDFs are written. Relative paths resolve against the app directory. In the container this is `/data/files`, a volume. |
-| `PublicBaseUrl` | `http://localhost:8080` | **Must be the address callers can reach**, not the container's. This is what `FileUrl` is built from; get it wrong and every response hands out a dead link. A trailing slash is trimmed for you. |
+| `PublicBaseUrl` | `http://localhost:8080` | **Must be the address callers can reach**, not the container's. This is what `FileUrl` is built from, each time a link is made; get it wrong and every response hands out a dead link. A trailing slash is trimmed for you. Changing it fixes links already recorded for jobs too, because none is stored. |
 
 ## TemplateStore
 
@@ -232,7 +253,7 @@ ends every console session at its next request. Serving requirements (HTTPS, one
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `RetentionHours` | `24` | 1–168. How long a job stays pollable after its last update. Jobs are in the [database](#database): a restart does not shorten this, and every instance honours it. A job past it is gone from the API at once and deleted from the table within the hour. |
+| `RetentionHours` | `24` | 1–168. How long a job stays pollable after its last update. Jobs are in the [database](#database): a restart does not shorten this, and every instance honours it. A job past it is gone from the API at once and deleted from the table within the hour. A succeeded job is kept as long as its file, then for this long: while the file is there the job has its link, and for this long after the file expires it still says `fileExpired: true`. |
 
 ## Logging
 
@@ -244,17 +265,23 @@ scope, so a structured sink can show every line for one job together.
   "LogLevel": {
     "Default": "Information",
     "Microsoft.AspNetCore": "Warning",
+    "Microsoft.AspNetCore.Hosting.Diagnostics": "Warning",
     "MassTransit": "Warning",
     "PdfBuilder": "Debug"
   }
 }
 ```
 
+`Microsoft.AspNetCore.Hosting.Diagnostics` is pinned to `Warning` on purpose. At `Information` it writes every
+request's URL, and a signed file link carries its signature in the query string: anyone who reads the log could
+use the link until it expires. Do not raise it; if you must for a short while, expect signatures in the output.
+
 ## Environment variables you will actually set
 
 ```bash
 ConnectionStrings__Database="Host=postgres;Database=pdf_builder;Username=pdf_builder;Password=…"
 Blocks__Admin__KeyHash=3f0a…c91e
+Blocks__Files__SigningKey=…
 RabbitMq__Host=rabbitmq
 RabbitMq__Username=pdf-builder
 RabbitMq__Password=…

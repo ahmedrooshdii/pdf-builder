@@ -9,4 +9,4 @@ public sealed record GeneratePdfCommand(string TemplateKey, string JsonPayload, 
     : IRequest<GeneratePdfResult>;
 
 /// <summary>Where the rendered PDF ended up.</summary>
-public sealed record GeneratePdfResult(string FileId, string FileUrl, long SizeBytes);
+public sealed record GeneratePdfResult(string FileId, long SizeBytes, DateTimeOffset FileCreatedAt);
